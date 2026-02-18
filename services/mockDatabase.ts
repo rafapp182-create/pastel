@@ -9,7 +9,8 @@ import {
   query, 
   orderBy, 
   getDocs,
-  limit
+  limit,
+  where
 } from "firebase/firestore";
 import { firestore } from "./firebase";
 import { 
@@ -75,10 +76,13 @@ class FirebaseDatabase {
     });
 
     // Escuta de Sessão de Caixa Ativa
-    onSnapshot(collection(firestore, "sessions"), (snapshot) => {
-      const active = snapshot.docs.find(d => d.data().status === 'open');
+    const sessionsQuery = query(collection(firestore, "sessions"), where("status", "==", "open"), limit(1));
+    onSnapshot(sessionsQuery, (snapshot) => {
+      const active = snapshot.docs[0];
       this.currentSession = active ? ({ ...active.data(), id: active.id } as CashierSession) : null;
       this.notify();
+    }, (error) => {
+      console.error("Erro na escuta de sessões:", error);
     });
 
     this.initialized = true;

@@ -226,7 +226,12 @@ const AdminPage: React.FC = () => {
                   />
                   {newProduct.imageUrl && (
                     <div className="w-14 h-14 rounded-xl overflow-hidden border border-slate-200 shadow-sm">
-                      <img src={newProduct.imageUrl} className="w-full h-full object-cover" alt="Preview" />
+                      <img 
+                        src={newProduct.imageUrl} 
+                        referrerPolicy="no-referrer"
+                        className="w-full h-full object-cover" 
+                        alt="Preview" 
+                      />
                     </div>
                   )}
                 </div>
@@ -263,11 +268,16 @@ const AdminPage: React.FC = () => {
                   {products.map(p => (
                     <tr key={p.id} className="hover:bg-slate-50 transition-colors">
                       <td className="px-8 py-4">
-                        <img src={p.imageUrl} className="w-10 h-10 rounded-lg object-cover shadow-sm" alt={p.name} />
+                        <img 
+                          src={p.imageUrl} 
+                          referrerPolicy="no-referrer"
+                          className="w-10 h-10 rounded-lg object-cover shadow-sm" 
+                          alt={p.name} 
+                        />
                       </td>
                       <td className="px-8 py-4 font-bold text-slate-800">{p.name}</td>
                       <td className="px-8 py-4 text-slate-400 text-xs font-bold">{p.category}</td>
-                      <td className="px-8 py-4 text-right font-black text-orange-600">R$ {p.price.toFixed(2)}</td>
+                      <td className="px-8 py-4 text-right font-black text-orange-600 text-base">R$ {p.price.toFixed(2)}</td>
                     </tr>
                   ))}
                 </tbody>

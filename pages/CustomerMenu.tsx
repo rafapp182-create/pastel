@@ -18,6 +18,7 @@ const CustomerMenu: React.FC = () => {
         <img 
           src="https://picsum.photos/seed/pastel-hero/800/400" 
           alt="Banner" 
+          referrerPolicy="no-referrer"
           className="w-full h-full object-cover brightness-50"
         />
         <div className="absolute inset-0 flex flex-col items-center justify-center text-white text-center p-6">
@@ -37,12 +38,15 @@ const CustomerMenu: React.FC = () => {
                     <img 
                       src={product.imageUrl} 
                       alt={product.name} 
+                      referrerPolicy="no-referrer"
                       className="w-16 h-16 rounded-xl object-cover shadow-sm"
                     />
                     <div className="flex-1 border-b border-slate-100 pb-3">
                       <div className="flex justify-between items-start mb-0.5">
                         <h3 className="font-bold text-slate-800 text-base group-hover:text-orange-600 transition-colors leading-tight">{product.name}</h3>
-                        <span className="font-black text-orange-600 text-sm whitespace-nowrap ml-2">R$ {product.price.toFixed(2)}</span>
+                        <div className="bg-orange-50 px-2 py-1 rounded-lg ml-2">
+                          <span className="font-black text-orange-600 text-sm whitespace-nowrap">R$ {product.price.toFixed(2)}</span>
+                        </div>
                       </div>
                       <p className="text-xs text-slate-500 leading-snug line-clamp-2">{product.description}</p>
                     </div>
@@ -54,7 +58,11 @@ const CustomerMenu: React.FC = () => {
 
           <div className="py-8 text-center space-y-4">
               <div className="inline-block p-3 bg-slate-50 rounded-2xl border border-slate-200">
-                  <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=https://hojepodepastelaria.com/menu" alt="QR Code" />
+                  <img 
+                    src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=https://hojepodepastelaria.com/menu" 
+                    alt="QR Code" 
+                    referrerPolicy="no-referrer"
+                  />
               </div>
               <p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest">Aponte a câmera para pedir de novo</p>
           </div>

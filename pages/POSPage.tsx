@@ -52,13 +52,24 @@ const POSPage: React.FC = () => {
     setTimeout(() => setNotification(null), 3000);
   };
 
-  const handleOpenCashier = () => {
+  const [isOpening, setIsOpening] = useState(false);
+
+  const handleOpenCashier = async () => {
     const val = parseFloat(openingValue);
     if (isNaN(val) || val < 0) {
       return notify('Insira um valor de abertura válido.', 'error');
     }
-    db.openCashier(val);
-    notify('Caixa aberto com sucesso!');
+    
+    setIsOpening(true);
+    try {
+      await db.openCashier(val);
+      notify('Caixa aberto com sucesso!');
+    } catch (error: any) {
+      console.error("Erro ao abrir caixa:", error);
+      notify(`Erro ao abrir o caixa: ${error.message || 'Verifique suas permissões.'}`, 'error');
+    } finally {
+      setIsOpening(false);
+    }
   };
 
   const handleCloseCashier = () => {
@@ -244,9 +255,12 @@ const POSPage: React.FC = () => {
             </div>
             <button 
               onClick={handleOpenCashier}
-              className="w-full bg-orange-500 text-white py-4 rounded-2xl font-bold text-lg shadow-lg active:scale-95 transition-transform"
+              disabled={isOpening}
+              className={`w-full py-4 rounded-2xl font-bold text-lg shadow-lg active:scale-95 transition-transform ${
+                isOpening ? 'bg-slate-300 cursor-not-allowed' : 'bg-orange-500 text-white hover:bg-orange-600'
+              }`}
             >
-              Iniciar Turno
+              {isOpening ? 'Abrindo...' : 'Iniciar Turno'}
             </button>
           </div>
         </div>
@@ -324,8 +338,13 @@ const POSPage: React.FC = () => {
                 className="bg-white p-2 rounded-xl shadow-sm border border-slate-100 hover:border-orange-300 transition-all text-left flex flex-col gap-1 group"
               >
                 <div className="relative overflow-hidden rounded-lg aspect-square">
-                  <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
-                  <div className="absolute top-0.5 right-0.5 bg-white/90 px-1.5 py-0.5 rounded text-[8px] font-black text-orange-600 shadow-sm">
+                  <img 
+                    src={p.imageUrl} 
+                    alt={p.name} 
+                    referrerPolicy="no-referrer"
+                    className="w-full h-full object-cover transition-transform group-hover:scale-110" 
+                  />
+                  <div className="absolute bottom-1 right-1 bg-orange-600 text-white px-2 py-1 rounded-lg text-xs font-black shadow-lg border border-white/20">
                     R$ {p.price.toFixed(2)}
                   </div>
                 </div>
@@ -398,7 +417,7 @@ const POSPage: React.FC = () => {
                 <div key={item.productId} className="flex items-center justify-between bg-slate-50 p-3 rounded-2xl border border-slate-100">
                   <div className="flex-1 mr-4">
                     <h4 className="font-bold text-slate-800 text-sm line-clamp-1">{item.name}</h4>
-                    <p className="text-[10px] text-orange-600 font-bold">R$ {item.price.toFixed(2)}</p>
+                    <p className="text-xs text-orange-600 font-black">R$ {item.price.toFixed(2)}</p>
                   </div>
                   <div className="flex items-center gap-3">
                     <div className="flex items-center bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">

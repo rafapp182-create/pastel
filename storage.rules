@@ -3,18 +3,32 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
     
+    // Função para verificar se o usuário é um funcionário (Admin ou Caixa)
+    // Nota: Acesso ao Firestore em regras de Storage é possível mas pode ter custo de latência.
+    // Para simplificar e garantir performance, verificamos apenas se está autenticado para escrita.
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
     // Imagens de produtos na pasta 'products'
     match /products/{allPaths=**} {
-      // Clientes precisam ver as fotos no cardápio
+      // Público: Clientes precisam ver as fotos no cardápio digital
       allow read: if true;
-      // Apenas funcionários autenticados podem subir fotos
-      allow write: if request.auth != null;
+      
+      // Escrita: Apenas funcionários autenticados
+      // Em um cenário real, poderíamos validar o cargo via custom claims ou Firestore
+      allow write: if isSignedIn();
     }
     
-    // Outros arquivos
+    // Pasta de backups ou relatórios (se houver)
+    match /reports/{allPaths=**} {
+      allow read, write: if isSignedIn();
+    }
+
+    // Regra padrão para outros arquivos
     match /{allPaths=**} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
     }
   }
 }

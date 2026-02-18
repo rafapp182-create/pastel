@@ -7,6 +7,7 @@ import TableManager from './pages/TableManager';
 import AdminPage from './pages/AdminPage';
 import CustomerMenu from './pages/CustomerMenu';
 import LoginPage from './pages/LoginPage';
+import ProfilePage from './pages/ProfilePage';
 import { db } from './services/mockDatabase';
 import { auth, firestore } from './services/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
@@ -66,6 +67,7 @@ const App: React.FC = () => {
       case 'kitchen': return <KitchenPage />;
       case 'menu': return <CustomerMenu />;
       case 'admin': return <AdminPage />;
+      case 'profile': return <ProfilePage user={user} onUpdateUser={setUser} />;
       default: return <POSPage />;
     }
   };
@@ -77,6 +79,7 @@ const App: React.FC = () => {
       case 'kitchen': return 'Cozinha';
       case 'menu': return 'Cardápio Digital';
       case 'admin': return 'Administração';
+      case 'profile': return 'Meu Perfil';
       default: return 'Hoje Pode!';
     }
   };

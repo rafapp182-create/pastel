@@ -3,14 +3,20 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // --- FUNÇÕES AUXILIARES ---
+
     function isSignedIn() {
       return request.auth != null;
     }
 
-    // Verifica se o documento do usuário existe e se ele tem o cargo específico
+    // Busca o papel do usuário na coleção 'users' de forma segura
+    function getRole() {
+      let userPath = /databases/$(database)/documents/users/$(request.auth.uid);
+      return exists(userPath) ? get(userPath).data.role : 'caixa';
+    }
+
     function hasRole(role) {
-      let userDoc = /databases/$(database)/documents/users/$(request.auth.uid);
-      return isSignedIn() && exists(userDoc) && get(userDoc).data.role == role;
+      return isSignedIn() && getRole() == role;
     }
 
     function isAdmin() {
@@ -21,36 +27,59 @@ service cloud.firestore {
       return hasRole('caixa');
     }
 
+    function isCozinha() {
+      return hasRole('cozinha');
+    }
+
+    function isStaff() {
+      return isAdmin() || isCaixa() || isCozinha();
+    }
+
     // --- REGRAS POR COLEÇÃO ---
 
+    // Usuários: Perfis e permissões
     match /users/{userId} {
+      // Qualquer funcionário logado pode ver a lista de usuários (para admin ou identificação)
       allow read: if isSignedIn();
-      // O usuário pode criar seu próprio documento SE estiver logado (recém registrado no Auth)
-      // OU se um Administrador estiver criando para ele.
+      // Criação: O próprio usuário ao se registrar ou um Admin
       allow create: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      // Apenas Admin pode mudar cargos ou deletar usuários
       allow update, delete: if isAdmin();
     }
 
+    // Produtos: Cardápio da pastelaria
     match /products/{productId} {
+      // Público: Clientes precisam ver o cardápio
       allow read: if true;
+      // Apenas Admin e Caixa podem gerenciar o estoque/produtos
       allow write: if isAdmin() || isCaixa();
     }
 
+    // Pedidos: O coração da operação
     match /orders/{orderId} {
-      allow read: if isSignedIn();
+      // Funcionários podem ler todos os pedidos
+      allow read: if isStaff();
+      // Admin e Caixa criam pedidos (Frente de Caixa / Mesas)
       allow create: if isAdmin() || isCaixa();
-      allow update: if isSignedIn(); 
+      // Atualização: 
+      // - Cozinha: Apenas para mudar status (preparo/finalizado)
+      // - Caixa/Admin: Para pagamentos e edições
+      allow update: if isStaff();
+      // Apenas Admin pode deletar pedidos (cancelamento crítico)
       allow delete: if isAdmin();
     }
 
+    // Mesas: Gestão de ocupação
     match /tables/{tableId} {
-      allow read: if isSignedIn();
+      allow read: if isStaff();
+      // Apenas Admin e Caixa abrem/fecham mesas
       allow write: if isAdmin() || isCaixa();
     }
 
+    // Sessões de Caixa: Abertura e fechamento de turno
     match /sessions/{sessionId} {
-      allow read: if isSignedIn() && (isAdmin() || isCaixa());
-      allow write: if isAdmin() || isCaixa();
+      // Apenas Admin e Caixa acessam dados financeiros de sessão
+      allow read, write: if isAdmin() || isCaixa();
     }
   }
 }

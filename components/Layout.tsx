@@ -17,6 +17,7 @@ const Layout: React.FC<LayoutProps> = ({ children, title, activeTab, setActiveTa
     { id: 'kitchen', label: 'Cozinha', icon: '👨‍🍳', roles: ['admin', 'cozinha'] },
     { id: 'menu', label: 'Cardápio', icon: '📋', roles: ['admin', 'caixa', 'cozinha'] },
     { id: 'admin', label: 'Admin', icon: '⚙️', roles: ['admin', 'caixa'] },
+    { id: 'profile', label: 'Perfil', icon: '👤', roles: ['admin', 'caixa', 'cozinha'] },
   ];
 
   const visibleNavItems = navItems.filter(item => !user || item.roles.includes(user.role));

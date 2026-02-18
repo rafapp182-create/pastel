@@ -1,0 +1,56 @@
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Verifica se o documento do usuário existe e se ele tem o cargo específico
+    function hasRole(role) {
+      let userDoc = /databases/$(database)/documents/users/$(request.auth.uid);
+      return isSignedIn() && exists(userDoc) && get(userDoc).data.role == role;
+    }
+
+    function isAdmin() {
+      return hasRole('admin');
+    }
+
+    function isCaixa() {
+      return hasRole('caixa');
+    }
+
+    // --- REGRAS POR COLEÇÃO ---
+
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      // O usuário pode criar seu próprio documento SE estiver logado (recém registrado no Auth)
+      // OU se um Administrador estiver criando para ele.
+      allow create: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow update, delete: if isAdmin();
+    }
+
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if isAdmin() || isCaixa();
+    }
+
+    match /orders/{orderId} {
+      allow read: if isSignedIn();
+      allow create: if isAdmin() || isCaixa();
+      allow update: if isSignedIn(); 
+      allow delete: if isAdmin();
+    }
+
+    match /tables/{tableId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() || isCaixa();
+    }
+
+    match /sessions/{sessionId} {
+      allow read: if isSignedIn() && (isAdmin() || isCaixa());
+      allow write: if isAdmin() || isCaixa();
+    }
+  }
+}

@@ -1,0 +1,20 @@
+
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Imagens de produtos na pasta 'products'
+    match /products/{allPaths=**} {
+      // Clientes precisam ver as fotos no cardápio
+      allow read: if true;
+      // Apenas funcionários autenticados podem subir fotos
+      allow write: if request.auth != null;
+    }
+    
+    // Outros arquivos
+    match /{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+  }
+}

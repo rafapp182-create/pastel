@@ -1,0 +1,7 @@
+{
+  "name": "Hoje Pode Pastelaria",
+  "description": "Um sistema completo de gestão para pastelarias, incluindo PDV, comanda de mesas, tela de cozinha e cardápio digital.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

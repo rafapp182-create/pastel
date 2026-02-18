@@ -1,0 +1,248 @@
+
+import { 
+  collection, 
+  onSnapshot, 
+  addDoc, 
+  updateDoc, 
+  doc, 
+  setDoc, 
+  query, 
+  orderBy, 
+  getDocs,
+  limit
+} from "firebase/firestore";
+import { firestore } from "./firebase";
+import { 
+  Product, 
+  Order, 
+  Table, 
+  OrderStatus, 
+  TableStatus, 
+  CashierSession, 
+  OrderItem, 
+  PaymentType 
+} from '../types';
+
+const initialProducts: Product[] = [
+  { id: '1', name: 'Pastel de Carne', description: 'Carne moída temperada, ovo e azeitona', category: 'Pasteis de Carne', price: 12.50, imageUrl: 'https://picsum.photos/seed/p1/300/200', active: true },
+  { id: '2', name: 'Carne com Queijo', description: 'Carne moída com mussarela derretida', category: 'Pasteis de Carne', price: 13.50, imageUrl: 'https://picsum.photos/seed/p12/300/200', active: true },
+  { id: '3', name: 'Pastel de Frango', description: 'Frango desfiado temperado', category: 'Pasteis de Frango', price: 11.00, imageUrl: 'https://picsum.photos/seed/p2/300/200', active: true },
+  { id: '4', name: 'Frango c/ Catupiry', description: 'Frango desfiado com o legítimo Catupiry', category: 'Pasteis de Frango', price: 14.00, imageUrl: 'https://picsum.photos/seed/p3/300/200', active: true },
+  { id: '5', name: '4 Queijos Especial', description: 'Mussarela, provolone, parmesão e gorgonzola', category: 'Pasteis Especiais', price: 16.00, imageUrl: 'https://picsum.photos/seed/p4/300/200', active: true },
+  { id: '6', name: 'Pastel de Bacalhau', description: 'Bacalhau do porto desfiado com azeitonas', category: 'Pasteis Especiais', price: 22.00, imageUrl: 'https://picsum.photos/seed/p13/300/200', active: true },
+  { id: '7', name: 'Caldo de Cana 500ml', description: 'Moído na hora, bem geladinho', category: 'Bebidas', price: 8.00, imageUrl: 'https://picsum.photos/seed/p5/300/200', active: true },
+  { id: '8', name: 'Coca-Cola Lata', description: '350ml gelada', category: 'Bebidas', price: 6.50, imageUrl: 'https://picsum.photos/seed/p6/300/200', active: true },
+];
+
+const initialTables: Table[] = Array.from({ length: 12 }, (_, i) => ({
+  id: `t${i + 1}`,
+  number: i + 1,
+  status: TableStatus.LIVRE
+}));
+
+class FirebaseDatabase {
+  private products: Product[] = [];
+  private orders: Order[] = [];
+  private tables: Table[] = [];
+  private currentSession: CashierSession | null = null;
+  private listeners: Set<() => void> = new Set();
+  private initialized = false;
+
+  constructor() {
+    this.initListeners();
+  }
+
+  private async initListeners() {
+    // Escuta de Produtos
+    onSnapshot(collection(firestore, "products"), (snapshot) => {
+      this.products = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Product));
+      if (this.products.length === 0 && !this.initialized) this.seedProducts();
+      this.notify();
+    });
+
+    // Escuta de Pedidos (limitado aos últimos 100 para performance)
+    const ordersQuery = query(collection(firestore, "orders"), orderBy("createdAt", "desc"), limit(100));
+    onSnapshot(ordersQuery, (snapshot) => {
+      this.orders = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Order));
+      this.notify();
+    });
+
+    // Escuta de Mesas
+    onSnapshot(collection(firestore, "tables"), (snapshot) => {
+      this.tables = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Table)).sort((a,b) => a.number - b.number);
+      if (this.tables.length === 0 && !this.initialized) this.seedTables();
+      this.notify();
+    });
+
+    // Escuta de Sessão de Caixa Ativa
+    onSnapshot(collection(firestore, "sessions"), (snapshot) => {
+      const active = snapshot.docs.find(d => d.data().status === 'open');
+      this.currentSession = active ? ({ ...active.data(), id: active.id } as CashierSession) : null;
+      this.notify();
+    });
+
+    this.initialized = true;
+  }
+
+  private async seedProducts() {
+    console.log("Seeding initial products...");
+    for (const p of initialProducts) {
+      const { id, ...data } = p;
+      await setDoc(doc(firestore, "products", id), data);
+    }
+  }
+
+  private async seedTables() {
+    console.log("Seeding initial tables...");
+    for (const t of initialTables) {
+      const { id, ...data } = t;
+      await setDoc(doc(firestore, "tables", id), data);
+    }
+  }
+
+  private notify() {
+    this.listeners.forEach(listener => listener());
+  }
+
+  subscribe(listener: () => void) {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  getCurrentSession() { return this.currentSession; }
+  
+  async openCashier(initialAmount: number) {
+    const sessionData = {
+      startTime: Date.now(),
+      initialAmount,
+      status: 'open'
+    };
+    await addDoc(collection(firestore, "sessions"), sessionData);
+  }
+
+  async closeCashier() {
+    if (this.currentSession) {
+      await updateDoc(doc(firestore, "sessions", this.currentSession.id), {
+        status: 'closed',
+        endTime: Date.now()
+      });
+    }
+  }
+
+  getProducts() { return this.products; }
+  
+  async addProduct(p: Omit<Product, 'id'>) {
+    const docRef = await addDoc(collection(firestore, "products"), p);
+    return { ...p, id: docRef.id };
+  }
+
+  getOrders() { return this.orders; }
+  
+  getOrderById(id: string) {
+    return this.orders.find(o => o.id === id);
+  }
+
+  async createOrder(order: Omit<Order, 'id' | 'createdAt' | 'sessionId'>) {
+    const itemsWithDescription = order.items.map(item => {
+      const prod = this.products.find(p => p.id === item.productId);
+      return {
+        ...item,
+        description: prod?.description || ''
+      };
+    });
+
+    const orderData = {
+      ...order,
+      items: itemsWithDescription,
+      createdAt: Date.now(),
+      sessionId: this.currentSession?.id || 'manual'
+    };
+
+    const docRef = await addDoc(collection(firestore, "orders"), orderData);
+    
+    if (order.tableNumber) {
+      const table = this.tables.find(t => t.number === order.tableNumber);
+      if (table) {
+        await updateDoc(doc(firestore, "tables", table.id), {
+          status: TableStatus.OCUPADA,
+          currentOrderId: docRef.id
+        });
+      }
+    }
+
+    return { ...orderData, id: docRef.id } as Order;
+  }
+
+  async updateOrderItems(orderId: string, items: OrderItem[]) {
+    const total = items.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+    const updatedItems = items.map(item => {
+      const prod = this.products.find(p => p.id === item.productId);
+      return {
+        ...item,
+        description: prod?.description || item.description || ''
+      };
+    });
+
+    await updateDoc(doc(firestore, "orders", orderId), {
+      items: updatedItems,
+      total
+    });
+  }
+
+  async updateOrderCustomerName(orderId: string, name: string) {
+    await updateDoc(doc(firestore, "orders", orderId), {
+      customerName: name
+    });
+  }
+
+  async markOrderAsDelivered(orderId: string) {
+    await updateDoc(doc(firestore, "orders", orderId), {
+      deliveredAt: Date.now()
+    });
+  }
+
+  async updateOrderStatus(orderId: string, status: OrderStatus) {
+    await updateDoc(doc(firestore, "orders", orderId), { status });
+    
+    if (status === OrderStatus.PAGO) {
+      const order = this.orders.find(o => o.id === orderId);
+      if (order?.tableNumber) {
+        const table = this.tables.find(t => t.number === order.tableNumber);
+        if (table) {
+          await updateDoc(doc(firestore, "tables", table.id), {
+            status: TableStatus.LIVRE,
+            currentOrderId: null
+          });
+        }
+      }
+    }
+  }
+
+  async updateOrderPayment(orderId: string, paymentType: PaymentType, amountReceived: number, change: number) {
+    await updateDoc(doc(firestore, "orders", orderId), {
+      paymentType,
+      amountReceived,
+      change,
+      status: OrderStatus.PAGO
+    });
+    
+    const order = this.orders.find(o => o.id === orderId);
+    if (order?.tableNumber) {
+      const table = this.tables.find(t => t.number === order.tableNumber);
+      if (table) {
+        await updateDoc(doc(firestore, "tables", table.id), {
+          status: TableStatus.LIVRE,
+          currentOrderId: null
+        });
+      }
+    }
+  }
+
+  getTables() { return this.tables; }
+  
+  getTableByNumber(num: number) {
+    return this.tables.find(t => t.number === num);
+  }
+}
+
+export const db = new FirebaseDatabase();

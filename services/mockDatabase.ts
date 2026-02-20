@@ -166,6 +166,32 @@ class FirebaseDatabase {
     }
   }
 
+  // Carrinho persistente
+  async getCart(userId: string): Promise<OrderItem[]> {
+    const cartDoc = await getDoc(doc(firestore, "carts", userId));
+    if (cartDoc.exists()) {
+      return cartDoc.data().items || [];
+    }
+    return [];
+  }
+
+  async updateCart(userId: string, items: OrderItem[]) {
+    await setDoc(doc(firestore, "carts", userId), {
+      items,
+      updatedAt: Date.now()
+    });
+  }
+
+  subscribeToCart(userId: string, callback: (items: OrderItem[]) => void) {
+    return onSnapshot(doc(firestore, "carts", userId), (snapshot) => {
+      if (snapshot.exists()) {
+        callback(snapshot.data().items || []);
+      } else {
+        callback([]);
+      }
+    });
+  }
+
   getOrders() { return this.orders; }
   
   getOrderById(id: string) {

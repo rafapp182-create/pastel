@@ -79,7 +79,7 @@ const App: React.FC = () => {
       case 'tables': return <TableManager />;
       case 'kitchen': return <KitchenPage />;
       case 'menu': return <CustomerMenu user={user} />;
-      case 'admin': return <AdminPage />;
+      case 'admin': return <AdminPage user={user} />;
       case 'profile': return <ProfilePage user={user} onUpdateUser={setUser} />;
       default: return <POSPage />;
     }

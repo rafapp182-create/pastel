@@ -12,7 +12,7 @@ service cloud.firestore {
     // Busca o papel do usuário na coleção 'users' de forma segura
     function getRole() {
       let userPath = /databases/$(database)/documents/users/$(request.auth.uid);
-      return exists(userPath) ? get(userPath).data.role : 'caixa';
+      return exists(userPath) ? get(userPath).data.role : 'customer';
     }
 
     function hasRole(role) {
@@ -94,6 +94,13 @@ service cloud.firestore {
       allow read: if true;
       // Apenas Admin e Caixa podem alterar configurações
       allow write: if isAdmin() || isCaixa();
+    }
+
+    // Carrinhos: Persistência de itens por usuário
+    match /carts/{userId} {
+      // O próprio usuário pode ler e escrever seu carrinho, Admin também pode ver
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow write: if isSignedIn() && request.auth.uid == userId;
     }
   }
 }

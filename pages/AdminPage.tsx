@@ -7,7 +7,11 @@ import { collection, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firesto
 import { initializeApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
 
-const AdminPage: React.FC = () => {
+interface AdminPageProps {
+  user: any;
+}
+
+const AdminPage: React.FC<AdminPageProps> = ({ user }) => {
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [session, setSession] = useState<CashierSession | null>(null);
@@ -17,6 +21,16 @@ const AdminPage: React.FC = () => {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [bannerUrl, setBannerUrl] = useState('');
   const [businessWhatsapp, setBusinessWhatsapp] = useState('');
+
+  const isAdmin = user?.role === 'admin';
+
+  const tabs = [
+    { id: 'stats', label: 'Resumo', icon: '📊', adminOnly: false },
+    { id: 'inventory', label: 'Produtos', icon: '🥟', adminOnly: false },
+    { id: 'history', label: 'Histórico', icon: '📜', adminOnly: false },
+    { id: 'users', label: 'Equipe', icon: '👥', adminOnly: true },
+    { id: 'settings', label: 'Ajustes', icon: '⚙️', adminOnly: true }
+  ].filter(tab => !tab.adminOnly || isAdmin);
   
   const [newProduct, setNewProduct] = useState({
       name: '',
@@ -172,13 +186,7 @@ const AdminPage: React.FC = () => {
 
       {/* Navegação por Abas */}
       <div className="flex bg-white p-1.5 rounded-3xl shadow-sm border border-slate-100 overflow-x-auto no-scrollbar mb-6">
-        {[
-          { id: 'stats', label: 'Resumo', icon: '📊' },
-          { id: 'inventory', label: 'Produtos', icon: '🥟' },
-          { id: 'history', label: 'Histórico', icon: '📜' },
-          { id: 'users', label: 'Equipe', icon: '👥' },
-          { id: 'settings', label: 'Ajustes', icon: '⚙️' }
-        ].map(tab => (
+        {tabs.map(tab => (
           <button 
             key={tab.id}
             onClick={() => setActiveSubTab(tab.id as any)}

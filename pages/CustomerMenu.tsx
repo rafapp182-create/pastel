@@ -25,33 +25,50 @@ const CustomerMenu: React.FC<CustomerMenuProps> = ({ user }) => {
     });
   }, []);
 
-  const addToCart = (product: Product) => {
-    setCart(prev => {
-      const existing = prev.find(item => item.productId === product.id);
-      if (existing) {
-        return prev.map(item => 
-          item.productId === product.id 
-            ? { ...item, quantity: item.quantity + 1 } 
-            : item
-        );
-      }
-      return [...prev, { 
+  // Sync cart with Firestore
+  useEffect(() => {
+    if (user?.id) {
+      const unsub = db.subscribeToCart(user.id, (items) => {
+        setCart(items);
+      });
+      return unsub;
+    }
+  }, [user?.id]);
+
+  const addToCart = async (product: Product) => {
+    const newCart = [...cart];
+    const existing = newCart.find(item => item.productId === product.id);
+    
+    if (existing) {
+      existing.quantity += 1;
+    } else {
+      newCart.push({ 
         productId: product.id, 
         name: product.name, 
         price: product.price, 
         quantity: 1 
-      }];
-    });
+      });
+    }
+
+    setCart(newCart);
+    if (user?.id) {
+      await db.updateCart(user.id, newCart);
+    }
   };
 
-  const updateQuantity = (productId: string, delta: number) => {
-    setCart(prev => prev.map(item => {
+  const updateQuantity = async (productId: string, delta: number) => {
+    const newCart = cart.map(item => {
       if (item.productId === productId) {
         const newQty = Math.max(0, item.quantity + delta);
         return { ...item, quantity: newQty };
       }
       return item;
-    }).filter(item => item.quantity > 0));
+    }).filter(item => item.quantity > 0);
+
+    setCart(newCart);
+    if (user?.id) {
+      await db.updateCart(user.id, newCart);
+    }
   };
 
   const total = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
@@ -91,7 +108,13 @@ const CustomerMenu: React.FC<CustomerMenuProps> = ({ user }) => {
       
       const whatsappMsg = formatWhatsappMessage(cart, total);
       setLastOrderId(order.id);
+      
+      // Limpa o carrinho local e no Firestore
       setCart([]);
+      if (user?.id) {
+        await db.updateCart(user.id, []);
+      }
+      
       setShowCart(false);
       setOrderSuccess(true);
 

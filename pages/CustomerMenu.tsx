@@ -5,9 +5,11 @@ import { Product } from '../types';
 
 const CustomerMenu: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
+  const [bannerUrl, setBannerUrl] = useState('https://picsum.photos/seed/pastel-hero/800/400');
 
   useEffect(() => {
     setProducts(db.getProducts().filter(p => p.active));
+    db.getSettings().then(s => setBannerUrl(s.bannerUrl));
   }, []);
 
   const categories = Array.from(new Set(products.map(p => p.category)));
@@ -16,7 +18,7 @@ const CustomerMenu: React.FC = () => {
     <div className="max-w-2xl mx-auto bg-white min-h-screen">
       <div className="relative h-48 overflow-hidden">
         <img 
-          src="https://picsum.photos/seed/pastel-hero/800/400" 
+          src={bannerUrl} 
           alt="Banner" 
           referrerPolicy="no-referrer"
           className="w-full h-full object-cover brightness-50"

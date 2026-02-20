@@ -12,8 +12,10 @@ const AdminPage: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [session, setSession] = useState<CashierSession | null>(null);
   const [users, setUsers] = useState<any[]>([]);
-  const [activeSubTab, setActiveSubTab] = useState<'stats' | 'inventory' | 'history' | 'users'>('stats');
+  const [activeSubTab, setActiveSubTab] = useState<'stats' | 'inventory' | 'history' | 'users' | 'settings'>('stats');
   const [expandedDate, setExpandedDate] = useState<string | null>(null);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [bannerUrl, setBannerUrl] = useState('');
   
   const [newProduct, setNewProduct] = useState({
       name: '',
@@ -46,6 +48,8 @@ const AdminPage: React.FC = () => {
       setUsers(snapshot.docs.map(d => ({ ...d.data(), id: d.id })));
     });
 
+    db.getSettings().then(s => setBannerUrl(s.bannerUrl));
+
     return () => {
       unsub();
       unsubUsers();
@@ -61,15 +65,43 @@ const AdminPage: React.FC = () => {
       e.preventDefault();
       if (!newProduct.name || !newProduct.price) return notify('Preencha os campos obrigatórios.', 'error');
 
-      await db.addProduct({
+      if (editingProduct) {
+        await db.updateProduct(editingProduct.id, {
           ...newProduct,
-          price: parseFloat(newProduct.price),
-          active: true,
-          imageUrl: newProduct.imageUrl || `https://picsum.photos/seed/${newProduct.name}/300/200`
-      });
+          price: parseFloat(newProduct.price)
+        });
+        setEditingProduct(null);
+        notify('Produto atualizado com sucesso!');
+      } else {
+        await db.addProduct({
+            ...newProduct,
+            price: parseFloat(newProduct.price),
+            active: true,
+            imageUrl: newProduct.imageUrl || `https://picsum.photos/seed/${newProduct.name}/300/200`
+        });
+        notify('Produto cadastrado com sucesso!');
+      }
 
       setNewProduct({ name: '', description: '', category: 'Pasteis de Carne', price: '', imageUrl: '' });
-      notify('Produto cadastrado com sucesso!');
+  };
+
+  const handleEditProduct = (p: Product) => {
+    setEditingProduct(p);
+    setNewProduct({
+      name: p.name,
+      description: p.description,
+      category: p.category,
+      price: p.price.toString(),
+      imageUrl: p.imageUrl
+    });
+    setActiveSubTab('inventory');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleUpdateSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await db.updateSettings({ bannerUrl });
+    notify('Configurações atualizadas!');
   };
 
   const handleCreateUser = async (e: React.FormEvent) => {
@@ -140,7 +172,8 @@ const AdminPage: React.FC = () => {
           { id: 'stats', label: 'Resumo', icon: '📊' },
           { id: 'inventory', label: 'Produtos', icon: '🥟' },
           { id: 'history', label: 'Histórico', icon: '📜' },
-          { id: 'users', label: 'Equipe', icon: '👥' }
+          { id: 'users', label: 'Equipe', icon: '👥' },
+          { id: 'settings', label: 'Ajustes', icon: '⚙️' }
         ].map(tab => (
           <button 
             key={tab.id}
@@ -177,9 +210,19 @@ const AdminPage: React.FC = () => {
       {activeSubTab === 'inventory' && (
         <div className="space-y-8 animate-fade-in">
           <div className="bg-white p-8 rounded-[2.5rem] shadow-lg border border-slate-100">
-            <div className="flex items-center gap-3 mb-6">
-              <span className="text-2xl">🥟</span>
-              <h2 className="text-xl font-black text-slate-800">Cadastrar Novo Item</h2>
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">🥟</span>
+                <h2 className="text-xl font-black text-slate-800">{editingProduct ? 'Editar Item' : 'Cadastrar Novo Item'}</h2>
+              </div>
+              {editingProduct && (
+                <button 
+                  onClick={() => { setEditingProduct(null); setNewProduct({ name: '', description: '', category: 'Pasteis de Carne', price: '', imageUrl: '' }); }}
+                  className="text-xs text-red-500 font-bold uppercase tracking-widest hover:underline"
+                >
+                  Cancelar Edição
+                </button>
+              )}
             </div>
             <form onSubmit={handleAddProduct} className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
@@ -245,7 +288,7 @@ const AdminPage: React.FC = () => {
                 />
               </div>
               <button className="md:col-span-2 bg-orange-500 text-white font-black py-5 rounded-2xl hover:bg-orange-600 transition-all shadow-xl active:scale-95 text-lg">
-                Salvar Item
+                {editingProduct ? 'Salvar Alterações' : 'Salvar Item'}
               </button>
             </form>
           </div>
@@ -262,10 +305,11 @@ const AdminPage: React.FC = () => {
                     <th className="px-8 py-4">Nome</th>
                     <th className="px-8 py-4">Categoria</th>
                     <th className="px-8 py-4 text-right">Preço</th>
+                    <th className="px-8 py-4 text-center">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                  {products.map(p => (
+                  {products.filter(p => p.active !== false).map(p => (
                     <tr key={p.id} className="hover:bg-slate-50 transition-colors">
                       <td className="px-8 py-4">
                         <img 
@@ -278,6 +322,12 @@ const AdminPage: React.FC = () => {
                       <td className="px-8 py-4 font-bold text-slate-800">{p.name}</td>
                       <td className="px-8 py-4 text-slate-400 text-xs font-bold">{p.category}</td>
                       <td className="px-8 py-4 text-right font-black text-orange-600 text-base">R$ {p.price.toFixed(2)}</td>
+                      <td className="px-8 py-4 text-center">
+                        <div className="flex justify-center gap-2">
+                          <button onClick={() => handleEditProduct(p)} className="text-blue-400 hover:text-blue-600 p-2">✏️</button>
+                          <button onClick={() => db.deleteProduct(p.id)} className="text-red-400 hover:text-red-600 p-2">🗑️</button>
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -372,6 +422,40 @@ const AdminPage: React.FC = () => {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* ABA: CONFIGURAÇÕES */}
+      {activeSubTab === 'settings' && (
+        <div className="space-y-8 animate-fade-in">
+          <div className="bg-white p-8 rounded-[2.5rem] shadow-lg border border-slate-100">
+            <div className="flex items-center gap-3 mb-6">
+              <span className="text-2xl">⚙️</span>
+              <h2 className="text-xl font-black text-slate-800">Configurações do Cardápio</h2>
+            </div>
+            <form onSubmit={handleUpdateSettings} className="space-y-6">
+              <div className="space-y-2">
+                <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">URL do Banner Principal</label>
+                <div className="flex gap-4">
+                  <input 
+                    className="flex-1 bg-slate-100 text-slate-900 rounded-2xl p-4 outline-none focus:ring-2 focus:ring-orange-500 font-bold border-none" 
+                    value={bannerUrl} 
+                    onChange={e => setBannerUrl(e.target.value)} 
+                    placeholder="https://suaimagem.com/banner.jpg" 
+                  />
+                  {bannerUrl && (
+                    <div className="w-24 h-14 rounded-xl overflow-hidden border border-slate-200 shadow-sm">
+                      <img src={bannerUrl} className="w-full h-full object-cover" alt="Banner Preview" referrerPolicy="no-referrer" />
+                    </div>
+                  )}
+                </div>
+                <p className="text-[10px] text-slate-400 font-medium px-2 italic">Esta imagem aparecerá no topo do cardápio digital dos clientes.</p>
+              </div>
+              <button className="w-full bg-orange-500 text-white font-black py-5 rounded-2xl hover:bg-orange-600 transition-all shadow-xl active:scale-95 text-lg">
+                Salvar Configurações
+              </button>
+            </form>
           </div>
         </div>
       )}

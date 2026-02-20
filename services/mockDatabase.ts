@@ -140,6 +140,32 @@ class FirebaseDatabase {
     return { ...p, id: docRef.id };
   }
 
+  async updateProduct(id: string, p: Partial<Product>) {
+    await updateDoc(doc(firestore, "products", id), p);
+  }
+
+  async deleteProduct(id: string) {
+    await updateDoc(doc(firestore, "products", id), { active: false });
+  }
+
+  async getSettings() {
+    const settingsDoc = await getDocs(query(collection(firestore, "settings"), limit(1)));
+    if (settingsDoc.empty) {
+      return { bannerUrl: 'https://picsum.photos/seed/pastel-hero/800/400' };
+    }
+    return settingsDoc.docs[0].data();
+  }
+
+  async updateSettings(settings: any) {
+    const settingsCol = collection(firestore, "settings");
+    const snapshot = await getDocs(settingsCol);
+    if (snapshot.empty) {
+      await addDoc(settingsCol, settings);
+    } else {
+      await updateDoc(doc(firestore, "settings", snapshot.docs[0].id), settings);
+    }
+  }
+
   getOrders() { return this.orders; }
   
   getOrderById(id: string) {

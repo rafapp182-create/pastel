@@ -14,7 +14,10 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
-  const [role, setRole] = useState<UserRole>(UserRole.CAIXA);
+  const [address, setAddress] = useState('');
+  const [whatsapp, setWhatsapp] = useState('');
+  const [role, setRole] = useState<UserRole>(UserRole.CUSTOMER);
+  const [isStaffRegistration, setIsStaffRegistration] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,25 +37,26 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
       
       if (!userDoc.exists()) {
         // Se a conta existe no Auth mas não no Firestore, criamos um perfil básico
-        await setDoc(doc(firestore, "users", user.uid), {
+        const defaultProfile = {
           name: user.email?.split('@')[0] || 'Usuário',
           email: cleanEmail,
-          role: 'caixa',
+          role: UserRole.CUSTOMER,
           createdAt: Date.now()
-        });
+        };
+        await setDoc(doc(firestore, "users", user.uid), defaultProfile);
         onLoginSuccess({
           id: user.uid,
-          email: user.email,
-          role: 'caixa',
-          name: user.email?.split('@')[0]
+          ...defaultProfile
         });
       } else {
         const userData = userDoc.data();
         onLoginSuccess({
           id: user.uid,
           email: user.email,
-          role: userData.role || 'caixa',
-          name: userData.name || user.email?.split('@')[0]
+          role: userData.role || UserRole.CUSTOMER,
+          name: userData.name || user.email?.split('@')[0],
+          address: userData.address,
+          whatsapp: userData.whatsapp
         });
       }
     } catch (err: any) {
@@ -73,6 +77,8 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
     e.preventDefault();
     if (!name.trim()) return setError('Por favor, informe seu nome.');
     if (password.length < 6) return setError('A senha deve ter pelo menos 6 caracteres.');
+    if (!isStaffRegistration && !address.trim()) return setError('Por favor, informe seu endereço para entregas.');
+    if (!isStaffRegistration && !whatsapp.trim()) return setError('Por favor, informe seu WhatsApp para contato.');
     
     setLoading(true);
     setError(null);
@@ -83,18 +89,22 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
       const userCredential = await createUserWithEmailAndPassword(auth, cleanEmail, password);
       const user = userCredential.user;
 
-      const newUserProfile = {
+      const newUserProfile: any = {
         name: name.trim(),
         email: cleanEmail,
-        role,
+        role: isStaffRegistration ? role : UserRole.CUSTOMER,
         createdAt: Date.now()
       };
+
+      if (!isStaffRegistration) {
+        newUserProfile.address = address.trim();
+        newUserProfile.whatsapp = whatsapp.trim();
+      }
 
       await setDoc(doc(firestore, "users", user.uid), newUserProfile);
 
       onLoginSuccess({
         id: user.uid,
-        email: user.email,
         ...newUserProfile
       });
     } catch (err: any) {
@@ -117,26 +127,55 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
             🥟
           </div>
           <h1 className="text-3xl font-black text-slate-800 tracking-tight">
-            {isRegistering ? 'Criar Conta' : 'Hoje Pode!'}
+            {isRegistering ? (isStaffRegistration ? 'Cadastro Equipe' : 'Criar Conta') : 'Hoje Pode!'}
           </h1>
           <p className="text-slate-400 font-bold uppercase text-[10px] tracking-widest">
-            {isRegistering ? 'Cadastre-se para acessar o sistema' : 'Gestão Profissional de Pastelaria'}
+            {isRegistering ? 'Cadastre-se para fazer seu pedido' : 'Gestão Profissional de Pastelaria'}
           </p>
         </div>
 
         <form onSubmit={isRegistering ? handleRegister : handleLogin} className="space-y-4">
           {isRegistering && (
-            <div className="space-y-1">
-              <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Nome Completo</label>
-              <input 
-                type="text" 
-                required
-                className="w-full bg-slate-100 text-slate-900 border-none rounded-2xl px-6 py-4 outline-none focus:ring-2 focus:ring-orange-500 transition-all font-bold"
-                placeholder="Seu nome"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </div>
+            <>
+              <div className="space-y-1">
+                <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Nome Completo</label>
+                <input 
+                  type="text" 
+                  required
+                  className="w-full bg-slate-100 text-slate-900 border-none rounded-2xl px-6 py-4 outline-none focus:ring-2 focus:ring-orange-500 transition-all font-bold"
+                  placeholder="Seu nome"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              </div>
+
+              {!isStaffRegistration && (
+                <>
+                  <div className="space-y-1">
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Endereço de Entrega</label>
+                    <input 
+                      type="text" 
+                      required
+                      className="w-full bg-slate-100 text-slate-900 border-none rounded-2xl px-6 py-4 outline-none focus:ring-2 focus:ring-orange-500 transition-all font-bold"
+                      placeholder="Rua, número, bairro"
+                      value={address}
+                      onChange={(e) => setAddress(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">WhatsApp</label>
+                    <input 
+                      type="tel" 
+                      required
+                      className="w-full bg-slate-100 text-slate-900 border-none rounded-2xl px-6 py-4 outline-none focus:ring-2 focus:ring-orange-500 transition-all font-bold"
+                      placeholder="(00) 00000-0000"
+                      value={whatsapp}
+                      onChange={(e) => setWhatsapp(e.target.value)}
+                    />
+                  </div>
+                </>
+              )}
+            </>
           )}
 
           <div className="space-y-1">
@@ -145,7 +184,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
               type="email" 
               required
               className="w-full bg-slate-100 text-slate-900 border-none rounded-2xl px-6 py-4 outline-none focus:ring-2 focus:ring-orange-500 transition-all font-bold"
-              placeholder="exemplo@pastel.com"
+              placeholder="exemplo@email.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
@@ -163,7 +202,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
             />
           </div>
 
-          {isRegistering && (
+          {isRegistering && isStaffRegistration && (
             <div className="space-y-1">
               <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Cargo</label>
               <select 
@@ -197,13 +236,30 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
           </button>
         </form>
 
-        <div className="text-center">
+        <div className="text-center space-y-4">
           <button 
-            onClick={() => { setIsRegistering(!isRegistering); setError(null); }}
-            className="text-[11px] text-orange-600 font-black uppercase tracking-widest hover:underline"
+            onClick={() => { 
+              setIsRegistering(!isRegistering); 
+              setError(null); 
+              setIsStaffRegistration(false);
+            }}
+            className="text-[11px] text-orange-600 font-black uppercase tracking-widest hover:underline block w-full"
           >
-            {isRegistering ? 'Voltar para Login' : 'Criar nova conta de colaborador'}
+            {isRegistering ? 'Voltar para Login' : 'Não tem conta? Cadastre-se aqui'}
           </button>
+          
+          {!isRegistering && (
+            <button 
+              onClick={() => { 
+                setIsRegistering(true); 
+                setIsStaffRegistration(true);
+                setError(null); 
+              }}
+              className="text-[9px] text-slate-400 font-bold uppercase tracking-widest hover:text-orange-500"
+            >
+              Acesso Colaborador
+            </button>
+          )}
         </div>
       </div>
 

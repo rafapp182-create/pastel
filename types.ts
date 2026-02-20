@@ -21,7 +21,8 @@ export enum TableStatus {
 export enum UserRole {
   ADMIN = 'admin',
   CAIXA = 'caixa',
-  COZINHA = 'cozinha'
+  COZINHA = 'cozinha',
+  CUSTOMER = 'customer'
 }
 
 export interface Product {
@@ -52,6 +53,9 @@ export interface Order {
   status: OrderStatus;
   tableNumber?: number;
   customerName?: string;
+  customerAddress?: string;
+  customerWhatsapp?: string;
+  customerId?: string;
   createdAt: number;
   deliveredAt?: number; // Novo campo para rastrear entrega
   sessionId?: string;
@@ -67,7 +71,10 @@ export interface Table {
 export interface User {
   id: string;
   name: string;
+  email: string;
   role: UserRole;
+  address?: string;
+  whatsapp?: string;
 }
 
 export interface CashierSession {

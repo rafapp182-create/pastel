@@ -23,14 +23,22 @@ const App: React.FC = () => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         const userDoc = await getDoc(doc(firestore, "users", firebaseUser.uid));
-        const userData = userDoc.exists() ? userDoc.data() : { role: 'caixa' };
+        const userData = userDoc.exists() ? userDoc.data() : { role: 'customer' };
         
-        setUser({
+        const loggedUser = {
           id: firebaseUser.uid,
           email: firebaseUser.email,
-          role: userData.role || 'caixa',
-          name: userData.name || firebaseUser.email?.split('@')[0]
-        });
+          role: userData.role || 'customer',
+          name: userData.name || firebaseUser.email?.split('@')[0],
+          address: userData.address,
+          whatsapp: userData.whatsapp
+        };
+        setUser(loggedUser);
+        
+        // Se for cliente, a aba padrão é o cardápio
+        if (loggedUser.role === 'customer') {
+          setActiveTab('menu');
+        }
       } else {
         setUser(null);
       }
@@ -61,11 +69,16 @@ const App: React.FC = () => {
       return <LoginPage onLoginSuccess={setUser} />;
     }
 
+    // Se for cliente, renderiza apenas o cardápio
+    if (user.role === 'customer') {
+      return <CustomerMenu user={user} />;
+    }
+
     switch (activeTab) {
       case 'pos': return <POSPage />;
       case 'tables': return <TableManager />;
       case 'kitchen': return <KitchenPage />;
-      case 'menu': return <CustomerMenu />;
+      case 'menu': return <CustomerMenu user={user} />;
       case 'admin': return <AdminPage />;
       case 'profile': return <ProfilePage user={user} onUpdateUser={setUser} />;
       default: return <POSPage />;
@@ -84,8 +97,8 @@ const App: React.FC = () => {
     }
   };
 
-  // Se não houver usuário, renderiza apenas o conteúdo (LoginPage ou Loading)
-  if (!user) {
+  // Se não houver usuário ou for cliente, renderiza apenas o conteúdo
+  if (!user || user.role === 'customer') {
     return renderContent();
   }
 

@@ -31,6 +31,10 @@ service cloud.firestore {
       return hasRole('cozinha');
     }
 
+    function isCustomer() {
+      return hasRole('customer');
+    }
+
     function isStaff() {
       return isAdmin() || isCaixa() || isCozinha();
     }
@@ -43,8 +47,10 @@ service cloud.firestore {
       allow read: if isSignedIn();
       // Criação: O próprio usuário ao se registrar ou um Admin
       allow create: if isSignedIn() && (request.auth.uid == userId || isAdmin());
-      // Apenas Admin pode mudar cargos ou deletar usuários
-      allow update, delete: if isAdmin();
+      // O próprio usuário pode atualizar seu perfil (endereço, whatsapp)
+      allow update: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      // Apenas Admin pode deletar usuários
+      allow delete: if isAdmin();
     }
 
     // Produtos: Cardápio da pastelaria
@@ -57,10 +63,10 @@ service cloud.firestore {
 
     // Pedidos: O coração da operação
     match /orders/{orderId} {
-      // Funcionários podem ler todos os pedidos
-      allow read: if isStaff();
-      // Admin e Caixa criam pedidos (Frente de Caixa / Mesas)
-      allow create: if isAdmin() || isCaixa();
+      // Funcionários podem ler todos os pedidos, clientes apenas os seus
+      allow read: if isStaff() || (isSignedIn() && resource.data.customerId == request.auth.uid);
+      // Admin, Caixa e Clientes criam pedidos
+      allow create: if isAdmin() || isCaixa() || isCustomer();
       // Atualização: 
       // - Cozinha: Apenas para mudar status (preparo/finalizado)
       // - Caixa/Admin: Para pagamentos e edições

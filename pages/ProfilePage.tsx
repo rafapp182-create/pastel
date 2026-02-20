@@ -11,6 +11,8 @@ interface ProfilePageProps {
 
 const ProfilePage: React.FC<ProfilePageProps> = ({ user, onUpdateUser }) => {
   const [name, setName] = useState(user.name || '');
+  const [address, setAddress] = useState(user.address || '');
+  const [whatsapp, setWhatsapp] = useState(user.whatsapp || '');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
@@ -26,12 +28,19 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user, onUpdateUser }) => {
         
         // Update Firestore user document
         const userRef = doc(firestore, "users", user.id);
-        await updateDoc(userRef, {
+        const updates: any = {
           name: name,
           updatedAt: Date.now()
-        });
+        };
 
-        const updatedUser = { ...user, name };
+        if (user.role === 'customer') {
+          updates.address = address;
+          updates.whatsapp = whatsapp;
+        }
+
+        await updateDoc(userRef, updates);
+
+        const updatedUser = { ...user, name, address, whatsapp };
         onUpdateUser(updatedUser);
         setMessage({ type: 'success', text: 'Perfil atualizado com sucesso!' });
       }
@@ -79,6 +88,33 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user, onUpdateUser }) => {
                 onChange={(e) => setName(e.target.value)}
               />
             </div>
+
+            {user.role === 'customer' && (
+              <>
+                <div className="space-y-2">
+                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Endereço de Entrega</label>
+                  <input 
+                    type="text" 
+                    required
+                    className="w-full bg-slate-50 text-slate-900 border-2 border-slate-100 rounded-2xl px-6 py-4 outline-none focus:border-orange-500 transition-all font-bold"
+                    placeholder="Seu endereço"
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">WhatsApp</label>
+                  <input 
+                    type="tel" 
+                    required
+                    className="w-full bg-slate-50 text-slate-900 border-2 border-slate-100 rounded-2xl px-6 py-4 outline-none focus:border-orange-500 transition-all font-bold"
+                    placeholder="Seu WhatsApp"
+                    value={whatsapp}
+                    onChange={(e) => setWhatsapp(e.target.value)}
+                  />
+                </div>
+              </>
+            )}
 
             <div className="space-y-2">
               <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">E-mail (Não editável)</label>

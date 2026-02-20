@@ -368,6 +368,8 @@ const POSPage: React.FC = () => {
                        <div className="text-left">
                           <p className="font-black text-xs text-slate-900">#{o.id.split('-')[1]} - {o.customerName || (o.tableNumber ? `Mesa ${o.tableNumber}` : 'Balcão')}</p>
                           <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{o.status}</p>
+                          {o.customerAddress && <p className="text-[9px] text-orange-500 font-bold mt-1">📍 {o.customerAddress}</p>}
+                          {o.customerWhatsapp && <p className="text-[9px] text-green-600 font-bold">📱 {o.customerWhatsapp}</p>}
                        </div>
                        <div className="text-right">
                           <p className="font-black text-orange-600">R$ {o.total.toFixed(2)}</p>
@@ -593,6 +595,8 @@ const POSPage: React.FC = () => {
               <div className="text-left text-[9px] space-y-1 mb-3">
                 <p>DATA: {new Date(lastOrder.createdAt).toLocaleString()}</p>
                 <p>IDENTIFICAÇÃO: {lastOrder.customerName || 'N/A'}</p>
+                {lastOrder.customerAddress && <p>ENDEREÇO: {lastOrder.customerAddress}</p>}
+                {lastOrder.customerWhatsapp && <p>WHATSAPP: {lastOrder.customerWhatsapp}</p>}
                 <p>MESA: {lastOrder.tableNumber || 'Balcão'}</p>
               </div>
               <div className="border-y-2 border-slate-300 py-2 space-y-2">

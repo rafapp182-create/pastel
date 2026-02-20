@@ -128,6 +128,16 @@ const KitchenPage: React.FC = () => {
                         <span>👤</span> {order.customerName}
                       </div>
                     )}
+                    {order.customerAddress && (
+                      <div className="text-slate-500 font-bold text-[10px] uppercase mt-1 flex items-center gap-1">
+                        <span>📍</span> {order.customerAddress}
+                      </div>
+                    )}
+                    {order.customerWhatsapp && (
+                      <div className="text-green-600 font-bold text-[10px] uppercase flex items-center gap-1">
+                        <span>📱</span> {order.customerWhatsapp}
+                      </div>
+                    )}
                     <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-2">
                       Recebido às {new Date(order.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                     </p>

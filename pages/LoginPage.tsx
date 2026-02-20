@@ -1,7 +1,12 @@
 
 import React, { useState } from 'react';
 import { auth, firestore } from '../services/firebase';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
+import { 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  GoogleAuthProvider, 
+  signInWithPopup 
+} from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { UserRole } from '../types';
 
@@ -16,8 +21,6 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
-  const [role, setRole] = useState<UserRole>(UserRole.CUSTOMER);
-  const [isStaffRegistration, setIsStaffRegistration] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -26,7 +29,6 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
     setLoading(true);
     setError(null);
 
-    // Limpeza rigorosa do e-mail (espaços no início ou fim)
     const cleanEmail = email.trim().toLowerCase();
 
     try {
@@ -36,9 +38,8 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
       const userDoc = await getDoc(doc(firestore, "users", user.uid));
       
       if (!userDoc.exists()) {
-        // Se a conta existe no Auth mas não no Firestore, criamos um perfil básico
         const defaultProfile = {
-          name: user.email?.split('@')[0] || 'Usuário',
+          name: user.displayName || user.email?.split('@')[0] || 'Usuário',
           email: cleanEmail,
           role: UserRole.CUSTOMER,
           createdAt: Date.now()
@@ -62,7 +63,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
     } catch (err: any) {
       console.error("Erro ao logar:", err.code);
       if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
-        setError('E-mail ou senha incorretos. Verifique se não há espaços extras.');
+        setError('E-mail ou senha incorretos.');
       } else if (err.code === 'auth/invalid-email') {
         setError('O formato do e-mail é inválido.');
       } else {
@@ -73,12 +74,54 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
     }
   };
 
+  const handleGoogleLogin = async () => {
+    setLoading(true);
+    setError(null);
+    const provider = new GoogleAuthProvider();
+
+    try {
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+
+      const userDoc = await getDoc(doc(firestore, "users", user.uid));
+      
+      if (!userDoc.exists()) {
+        const defaultProfile = {
+          name: user.displayName || 'Usuário',
+          email: user.email,
+          role: UserRole.CUSTOMER,
+          createdAt: Date.now()
+        };
+        await setDoc(doc(firestore, "users", user.uid), defaultProfile);
+        onLoginSuccess({
+          id: user.uid,
+          ...defaultProfile
+        });
+      } else {
+        const userData = userDoc.data();
+        onLoginSuccess({
+          id: user.uid,
+          email: user.email,
+          role: userData.role || UserRole.CUSTOMER,
+          name: userData.name || user.displayName,
+          address: userData.address,
+          whatsapp: userData.whatsapp
+        });
+      }
+    } catch (err: any) {
+      console.error("Erro Google Login:", err);
+      setError('Erro ao entrar com Google. Tente novamente.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return setError('Por favor, informe seu nome.');
     if (password.length < 6) return setError('A senha deve ter pelo menos 6 caracteres.');
-    if (!isStaffRegistration && !address.trim()) return setError('Por favor, informe seu endereço para entregas.');
-    if (!isStaffRegistration && !whatsapp.trim()) return setError('Por favor, informe seu WhatsApp para contato.');
+    if (!address.trim()) return setError('Por favor, informe seu endereço para entregas.');
+    if (!whatsapp.trim()) return setError('Por favor, informe seu WhatsApp para contato.');
     
     setLoading(true);
     setError(null);
@@ -89,17 +132,14 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
       const userCredential = await createUserWithEmailAndPassword(auth, cleanEmail, password);
       const user = userCredential.user;
 
-      const newUserProfile: any = {
+      const newUserProfile = {
         name: name.trim(),
         email: cleanEmail,
-        role: isStaffRegistration ? role : UserRole.CUSTOMER,
+        role: UserRole.CUSTOMER,
+        address: address.trim(),
+        whatsapp: whatsapp.trim(),
         createdAt: Date.now()
       };
-
-      if (!isStaffRegistration) {
-        newUserProfile.address = address.trim();
-        newUserProfile.whatsapp = whatsapp.trim();
-      }
 
       await setDoc(doc(firestore, "users", user.uid), newUserProfile);
 
@@ -120,146 +160,130 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6 text-slate-900">
-      <div className="w-full max-w-md bg-white rounded-[2.5rem] shadow-2xl p-10 space-y-8 animate-fade-in">
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4 sm:p-6 text-slate-900">
+      <div className="w-full max-w-md bg-white rounded-[2.5rem] shadow-2xl p-6 sm:p-10 space-y-6 sm:space-y-8 animate-fade-in">
         <div className="text-center space-y-2">
           <div className="w-20 h-20 bg-orange-100 text-orange-600 rounded-3xl flex items-center justify-center mx-auto text-4xl shadow-inner animate-bounce-subtle">
             🥟
           </div>
           <h1 className="text-3xl font-black text-slate-800 tracking-tight">
-            {isRegistering ? (isStaffRegistration ? 'Cadastro Equipe' : 'Criar Conta') : 'Hoje Pode!'}
+            {isRegistering ? 'Criar Conta' : 'Hoje Pode!'}
           </h1>
           <p className="text-slate-400 font-bold uppercase text-[10px] tracking-widest">
             {isRegistering ? 'Cadastre-se para fazer seu pedido' : 'Gestão Profissional de Pastelaria'}
           </p>
         </div>
 
-        <form onSubmit={isRegistering ? handleRegister : handleLogin} className="space-y-4">
-          {isRegistering && (
-            <>
-              <div className="space-y-1">
-                <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Nome Completo</label>
-                <input 
-                  type="text" 
-                  required
-                  className="w-full bg-slate-100 text-slate-900 border-none rounded-2xl px-6 py-4 outline-none focus:ring-2 focus:ring-orange-500 transition-all font-bold"
-                  placeholder="Seu nome"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                />
-              </div>
-
-              {!isStaffRegistration && (
-                <>
-                  <div className="space-y-1">
-                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Endereço de Entrega</label>
-                    <input 
-                      type="text" 
-                      required
-                      className="w-full bg-slate-100 text-slate-900 border-none rounded-2xl px-6 py-4 outline-none focus:ring-2 focus:ring-orange-500 transition-all font-bold"
-                      placeholder="Rua, número, bairro"
-                      value={address}
-                      onChange={(e) => setAddress(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">WhatsApp</label>
-                    <input 
-                      type="tel" 
-                      required
-                      className="w-full bg-slate-100 text-slate-900 border-none rounded-2xl px-6 py-4 outline-none focus:ring-2 focus:ring-orange-500 transition-all font-bold"
-                      placeholder="(00) 00000-0000"
-                      value={whatsapp}
-                      onChange={(e) => setWhatsapp(e.target.value)}
-                    />
-                  </div>
-                </>
-              )}
-            </>
-          )}
-
-          <div className="space-y-1">
-            <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">E-mail</label>
-            <input 
-              type="email" 
-              required
-              className="w-full bg-slate-100 text-slate-900 border-none rounded-2xl px-6 py-4 outline-none focus:ring-2 focus:ring-orange-500 transition-all font-bold"
-              placeholder="exemplo@email.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Senha</label>
-            <input 
-              type="password" 
-              required
-              className="w-full bg-slate-100 text-slate-900 border-none rounded-2xl px-6 py-4 outline-none focus:ring-2 focus:ring-orange-500 transition-all font-bold"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </div>
-
-          {isRegistering && isStaffRegistration && (
-            <div className="space-y-1">
-              <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Cargo</label>
-              <select 
-                className="w-full bg-slate-100 text-slate-900 border-none rounded-2xl px-6 py-4 outline-none focus:ring-2 focus:ring-orange-500 transition-all font-bold appearance-none"
-                value={role}
-                onChange={(e) => setRole(e.target.value as UserRole)}
-              >
-                <option value={UserRole.CAIXA}>Caixa</option>
-                <option value={UserRole.COZINHA}>Cozinha</option>
-                <option value={UserRole.ADMIN}>Administrador</option>
-              </select>
-            </div>
-          )}
-
-          {error && (
-            <div className="bg-red-50 text-red-500 p-4 rounded-2xl text-[11px] font-bold border border-red-100 animate-shake">
-              ⚠️ {error}
-            </div>
-          )}
-
+        <div className="space-y-4">
           <button 
-            type="submit"
+            onClick={handleGoogleLogin}
             disabled={loading}
-            className={`w-full py-5 rounded-2xl font-black text-lg shadow-xl transition-all mt-4 ${
-              loading 
-                ? 'bg-slate-200 text-slate-400 cursor-not-allowed' 
-                : 'bg-orange-500 text-white hover:bg-orange-600 shadow-orange-100 active:scale-95'
-            }`}
+            className="w-full flex items-center justify-center gap-3 py-4 bg-white border-2 border-slate-100 rounded-2xl font-bold text-slate-600 hover:bg-slate-50 transition-all active:scale-95 shadow-sm"
           >
-            {loading ? 'Processando...' : (isRegistering ? 'Cadastrar' : 'Entrar')}
+            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/pjax/google.png" alt="Google" className="w-5 h-5" />
+            Entrar com Google
           </button>
-        </form>
 
-        <div className="text-center space-y-4">
+          <div className="flex items-center gap-4 py-2">
+            <div className="h-px flex-1 bg-slate-100"></div>
+            <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">ou e-mail</span>
+            <div className="h-px flex-1 bg-slate-100"></div>
+          </div>
+
+          <form onSubmit={isRegistering ? handleRegister : handleLogin} className="space-y-4">
+            {isRegistering && (
+              <>
+                <div className="space-y-1">
+                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Nome Completo</label>
+                  <input 
+                    type="text" 
+                    required
+                    className="w-full bg-slate-100 text-slate-900 border-none rounded-2xl px-6 py-4 outline-none focus:ring-2 focus:ring-orange-500 transition-all font-bold"
+                    placeholder="Seu nome"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Endereço de Entrega</label>
+                  <input 
+                    type="text" 
+                    required
+                    className="w-full bg-slate-100 text-slate-900 border-none rounded-2xl px-6 py-4 outline-none focus:ring-2 focus:ring-orange-500 transition-all font-bold"
+                    placeholder="Rua, número, bairro"
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">WhatsApp</label>
+                  <input 
+                    type="tel" 
+                    required
+                    className="w-full bg-slate-100 text-slate-900 border-none rounded-2xl px-6 py-4 outline-none focus:ring-2 focus:ring-orange-500 transition-all font-bold"
+                    placeholder="(00) 00000-0000"
+                    value={whatsapp}
+                    onChange={(e) => setWhatsapp(e.target.value)}
+                  />
+                </div>
+              </>
+            )}
+
+            <div className="space-y-1">
+              <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">E-mail</label>
+              <input 
+                type="email" 
+                required
+                className="w-full bg-slate-100 text-slate-900 border-none rounded-2xl px-6 py-4 outline-none focus:ring-2 focus:ring-orange-500 transition-all font-bold"
+                placeholder="exemplo@email.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Senha</label>
+              <input 
+                type="password" 
+                required
+                className="w-full bg-slate-100 text-slate-900 border-none rounded-2xl px-6 py-4 outline-none focus:ring-2 focus:ring-orange-500 transition-all font-bold"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </div>
+
+            {error && (
+              <div className="bg-red-50 text-red-500 p-4 rounded-2xl text-[11px] font-bold border border-red-100 animate-shake">
+                ⚠️ {error}
+              </div>
+            )}
+
+            <button 
+              type="submit"
+              disabled={loading}
+              className={`w-full py-5 rounded-2xl font-black text-lg shadow-xl transition-all mt-4 ${
+                loading 
+                  ? 'bg-slate-200 text-slate-400 cursor-not-allowed' 
+                  : 'bg-orange-500 text-white hover:bg-orange-600 shadow-orange-100 active:scale-95'
+              }`}
+            >
+              {loading ? 'Processando...' : (isRegistering ? 'Cadastrar' : 'Entrar')}
+            </button>
+          </form>
+        </div>
+
+        <div className="text-center">
           <button 
             onClick={() => { 
               setIsRegistering(!isRegistering); 
               setError(null); 
-              setIsStaffRegistration(false);
             }}
             className="text-[11px] text-orange-600 font-black uppercase tracking-widest hover:underline block w-full"
           >
             {isRegistering ? 'Voltar para Login' : 'Não tem conta? Cadastre-se aqui'}
           </button>
-          
-          {!isRegistering && (
-            <button 
-              onClick={() => { 
-                setIsRegistering(true); 
-                setIsStaffRegistration(true);
-                setError(null); 
-              }}
-              className="text-[9px] text-slate-400 font-bold uppercase tracking-widest hover:text-orange-500"
-            >
-              Acesso Colaborador
-            </button>
-          )}
         </div>
       </div>
 

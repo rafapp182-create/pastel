@@ -87,5 +87,13 @@ service cloud.firestore {
       // Apenas Admin e Caixa acessam dados financeiros de sessão
       allow read, write: if isAdmin() || isCaixa();
     }
+
+    // Configurações Globais (Banner, WhatsApp, etc)
+    match /settings/{settingId} {
+      // Público: Clientes precisam ver o banner e saber o WhatsApp
+      allow read: if true;
+      // Apenas Admin e Caixa podem alterar configurações
+      allow write: if isAdmin() || isCaixa();
+    }
   }
 }

@@ -65,17 +65,17 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user, onUpdateUser }) => {
   return (
     <div className="max-w-2xl mx-auto space-y-6 animate-fade-in">
       <div className="bg-white rounded-[2rem] shadow-xl overflow-hidden">
-        <div className="bg-orange-500 p-8 text-white text-center">
-          <div className="w-24 h-24 bg-white/20 rounded-full flex items-center justify-center text-5xl mx-auto mb-4 shadow-inner">
+        <div className="bg-orange-500 p-6 sm:p-8 text-white text-center">
+          <div className="w-20 h-20 sm:w-24 sm:h-24 bg-white/20 rounded-full flex items-center justify-center text-4xl sm:text-5xl mx-auto mb-4 shadow-inner">
             👤
           </div>
-          <h2 className="text-2xl font-black tracking-tight">{user.name}</h2>
-          <p className="text-orange-100 font-bold uppercase text-[10px] tracking-widest mt-1">
+          <h2 className="text-xl sm:text-2xl font-black tracking-tight">{user.name}</h2>
+          <p className="text-orange-100 font-bold uppercase text-[9px] sm:text-[10px] tracking-widest mt-1">
             {user.role} • {user.email}
           </p>
         </div>
 
-        <div className="p-8">
+        <div className="p-6 sm:p-8">
           <form onSubmit={handleUpdateProfile} className="space-y-6">
             <div className="space-y-2">
               <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Nome de Exibição</label>

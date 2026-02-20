@@ -16,6 +16,7 @@ const AdminPage: React.FC = () => {
   const [expandedDate, setExpandedDate] = useState<string | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [bannerUrl, setBannerUrl] = useState('');
+  const [businessWhatsapp, setBusinessWhatsapp] = useState('');
   
   const [newProduct, setNewProduct] = useState({
       name: '',
@@ -48,7 +49,10 @@ const AdminPage: React.FC = () => {
       setUsers(snapshot.docs.map(d => ({ ...d.data(), id: d.id })));
     });
 
-    db.getSettings().then(s => setBannerUrl(s.bannerUrl));
+    db.getSettings().then(s => {
+      setBannerUrl(s.bannerUrl || '');
+      setBusinessWhatsapp(s.businessWhatsapp || '');
+    });
 
     return () => {
       unsub();
@@ -100,7 +104,7 @@ const AdminPage: React.FC = () => {
 
   const handleUpdateSettings = async (e: React.FormEvent) => {
     e.preventDefault();
-    await db.updateSettings({ bannerUrl });
+    await db.updateSettings({ bannerUrl, businessWhatsapp });
     notify('Configurações atualizadas!');
   };
 
@@ -167,7 +171,7 @@ const AdminPage: React.FC = () => {
       )}
 
       {/* Navegação por Abas */}
-      <div className="flex bg-white p-2 rounded-3xl shadow-sm border border-slate-100 overflow-x-auto scrollbar-hide">
+      <div className="flex bg-white p-1.5 rounded-3xl shadow-sm border border-slate-100 overflow-x-auto no-scrollbar mb-6">
         {[
           { id: 'stats', label: 'Resumo', icon: '📊' },
           { id: 'inventory', label: 'Produtos', icon: '🥟' },
@@ -178,12 +182,12 @@ const AdminPage: React.FC = () => {
           <button 
             key={tab.id}
             onClick={() => setActiveSubTab(tab.id as any)}
-            className={`flex-1 flex items-center justify-center gap-2 py-3 px-6 rounded-2xl text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap ${
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-2xl text-[10px] sm:text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap ${
               activeSubTab === tab.id ? 'bg-orange-500 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'
             }`}
           >
-            <span>{tab.icon}</span>
-            {tab.label}
+            <span className="text-sm sm:text-base">{tab.icon}</span>
+            <span className={activeSubTab === tab.id ? 'block' : 'hidden sm:block'}>{tab.label}</span>
           </button>
         ))}
       </div>
@@ -452,6 +456,16 @@ const AdminPage: React.FC = () => {
                 </div>
                 <p className="text-[10px] text-slate-400 font-medium px-2 italic">Esta imagem aparecerá no topo do cardápio digital dos clientes.</p>
               </div>
+              <div className="space-y-2">
+                <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">WhatsApp do Estabelecimento</label>
+                <input 
+                  className="w-full bg-slate-100 text-slate-900 rounded-2xl p-4 outline-none focus:ring-2 focus:ring-orange-500 font-bold border-none" 
+                  value={businessWhatsapp} 
+                  onChange={e => setBusinessWhatsapp(e.target.value)} 
+                  placeholder="Ex: 5511999999999" 
+                />
+                <p className="text-[10px] text-slate-400 font-medium px-2 italic">Número para onde os pedidos serão enviados via WhatsApp (inclua o DDI 55).</p>
+              </div>
               <button className="w-full bg-orange-500 text-white font-black py-5 rounded-2xl hover:bg-orange-600 transition-all shadow-xl active:scale-95 text-lg">
                 Salvar Configurações
               </button>
@@ -468,6 +482,8 @@ const AdminPage: React.FC = () => {
         .animate-slide-down { animation: slide-down 0.4s ease-out forwards; }
         @keyframes bounce-in { 0% { transform: scale(0.9); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
         .animate-bounce-in { animation: bounce-in 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
       `}</style>
     </div>
   );

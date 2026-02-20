@@ -10,14 +10,19 @@ interface CustomerMenuProps {
 const CustomerMenu: React.FC<CustomerMenuProps> = ({ user }) => {
   const [products, setProducts] = useState<Product[]>([]);
   const [bannerUrl, setBannerUrl] = useState('https://picsum.photos/seed/pastel-hero/800/400');
+  const [businessWhatsapp, setBusinessWhatsapp] = useState('');
   const [cart, setCart] = useState<OrderItem[]>([]);
   const [showCart, setShowCart] = useState(false);
   const [isOrdering, setIsOrdering] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(false);
+  const [lastOrderId, setLastOrderId] = useState<string | null>(null);
 
   useEffect(() => {
     setProducts(db.getProducts().filter(p => p.active));
-    db.getSettings().then(s => setBannerUrl(s.bannerUrl));
+    db.getSettings().then(s => {
+      setBannerUrl(s.bannerUrl || 'https://picsum.photos/seed/pastel-hero/800/400');
+      setBusinessWhatsapp(s.businessWhatsapp || '');
+    });
   }, []);
 
   const addToCart = (product: Product) => {
@@ -51,13 +56,30 @@ const CustomerMenu: React.FC<CustomerMenuProps> = ({ user }) => {
 
   const total = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
 
+  const formatWhatsappMessage = (orderItems: OrderItem[], orderTotal: number) => {
+    let message = `*NOVO PEDIDO - HOJE PODE!* 🥟\n\n`;
+    message += `*Cliente:* ${user?.name || 'Não identificado'}\n`;
+    message += `*Endereço:* ${user?.address || 'Retirada no balcão'}\n`;
+    message += `*WhatsApp:* ${user?.whatsapp || 'N/A'}\n\n`;
+    message += `*ITENS:*\n`;
+    
+    orderItems.forEach(item => {
+      message += `• ${item.quantity}x ${item.name} - R$ ${(item.price * item.quantity).toFixed(2)}\n`;
+    });
+    
+    message += `\n*TOTAL: R$ ${orderTotal.toFixed(2)}*\n\n`;
+    message += `_Pedido realizado via Cardápio Digital_`;
+    
+    return encodeURIComponent(message);
+  };
+
   const handlePlaceOrder = async () => {
     if (!user) return alert('Por favor, faça login para realizar o pedido.');
     if (cart.length === 0) return;
 
     setIsOrdering(true);
     try {
-      await db.createOrder({
+      const order = await db.createOrder({
         items: cart,
         total,
         status: OrderStatus.NOVO,
@@ -66,10 +88,22 @@ const CustomerMenu: React.FC<CustomerMenuProps> = ({ user }) => {
         customerWhatsapp: user.whatsapp,
         customerId: user.id
       });
+      
+      const whatsappMsg = formatWhatsappMessage(cart, total);
+      setLastOrderId(order.id);
       setCart([]);
       setShowCart(false);
       setOrderSuccess(true);
-      setTimeout(() => setOrderSuccess(false), 5000);
+
+      // Se houver whatsapp configurado, oferece a opção ou redireciona
+      if (businessWhatsapp) {
+        const confirmWhatsapp = window.confirm('Pedido registrado! Deseja enviar o resumo via WhatsApp para agilizar o atendimento?');
+        if (confirmWhatsapp) {
+          window.open(`https://wa.me/${businessWhatsapp}?text=${whatsappMsg}`, '_blank');
+        }
+      }
+
+      setTimeout(() => setOrderSuccess(false), 10000);
     } catch (error) {
       console.error("Erro ao fazer pedido:", error);
       alert('Erro ao processar seu pedido. Tente novamente.');
@@ -80,9 +114,22 @@ const CustomerMenu: React.FC<CustomerMenuProps> = ({ user }) => {
 
   const categories = Array.from(new Set(products.map(p => p.category)));
 
+  const scrollToCategory = (cat: string) => {
+    const element = document.getElementById(`category-${cat}`);
+    if (element) {
+      const headerOffset = 140;
+      const elementPosition = element.getBoundingClientRect().top;
+      const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+      window.scrollTo({
+        top: offsetPosition,
+        behavior: "smooth"
+      });
+    }
+  };
+
   return (
-    <div className="max-w-2xl mx-auto bg-white min-h-screen pb-24 relative">
-      <div className="relative h-48 overflow-hidden">
+    <div className="max-w-2xl mx-auto bg-white min-h-screen pb-32 relative">
+      <div className="relative h-40 sm:h-48 overflow-hidden">
         <img 
           src={bannerUrl} 
           alt="Banner" 
@@ -90,59 +137,82 @@ const CustomerMenu: React.FC<CustomerMenuProps> = ({ user }) => {
           className="w-full h-full object-cover brightness-50"
         />
         <div className="absolute inset-0 flex flex-col items-center justify-center text-white text-center p-6">
-          <h1 className="text-3xl font-black italic">Hoje Pode!</h1>
-          <p className="text-base opacity-90 font-medium">Os melhores pastéis da cidade 🥟</p>
+          <h1 className="text-3xl font-black italic drop-shadow-lg">Hoje Pode!</h1>
+          <p className="text-sm sm:text-base opacity-90 font-medium drop-shadow-md">Os melhores pastéis da cidade 🥟</p>
         </div>
       </div>
 
+      {/* Sticky Category Nav */}
+      <div className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-100 px-2 py-3 overflow-x-auto no-scrollbar flex gap-2 shadow-sm">
+        {categories.map(cat => (
+          <button
+            key={cat}
+            onClick={() => scrollToCategory(cat)}
+            className="whitespace-nowrap px-4 py-1.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-black uppercase tracking-widest hover:bg-orange-500 hover:text-white transition-all active:scale-95"
+          >
+            {cat}
+          </button>
+        ))}
+      </div>
+
       <div className="px-4 -mt-6 relative z-10">
-        <div className="bg-white rounded-t-3xl shadow-xl p-4 space-y-8">
+        <div className="bg-white rounded-t-3xl p-4 space-y-8">
           {user && (
-            <div className="bg-orange-50 p-4 rounded-2xl border border-orange-100">
-              <p className="text-xs font-black text-orange-600 uppercase tracking-widest mb-1">Bem-vindo(a),</p>
-              <h2 className="text-lg font-black text-slate-800">{user.name}</h2>
-              <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Entrega em: {user.address}</p>
+            <div className="bg-orange-50 p-4 rounded-2xl border border-orange-100 shadow-sm">
+              <p className="text-[9px] font-black text-orange-600 uppercase tracking-widest mb-1">Bem-vindo(a),</p>
+              <h2 className="text-base font-black text-slate-800">{user.name}</h2>
+              <p className="text-[9px] text-slate-400 font-bold uppercase mt-1 truncate">📍 {user.address}</p>
             </div>
           )}
 
           {orderSuccess && (
-            <div className="bg-green-500 text-white p-4 rounded-2xl font-black text-center animate-bounce-in">
-              ✅ Pedido enviado com sucesso! Aguarde o contato.
+            <div className="bg-green-500 text-white p-6 rounded-[2rem] font-black text-center animate-bounce-in shadow-xl shadow-green-100">
+              <p className="text-xl mb-1">✅ Pedido Enviado!</p>
+              <p className="text-[10px] uppercase tracking-widest opacity-80">Acompanhe pelo seu WhatsApp</p>
             </div>
           )}
 
-          {categories.map(cat => (
-            <div key={cat} className="space-y-3">
-              <h2 className="text-lg font-black text-slate-800 border-b-2 border-orange-500 inline-block pb-0.5">{cat}</h2>
-              <div className="space-y-4">
-                {products.filter(p => p.category === cat).map(product => (
-                  <div key={product.id} className="flex gap-3 group">
-                    <img 
-                      src={product.imageUrl} 
-                      alt={product.name} 
-                      referrerPolicy="no-referrer"
-                      className="w-16 h-16 rounded-xl object-cover shadow-sm"
-                    />
-                    <div className="flex-1 border-b border-slate-100 pb-3">
-                      <div className="flex justify-between items-start mb-0.5">
-                        <h3 className="font-bold text-slate-800 text-base group-hover:text-orange-600 transition-colors leading-tight">{product.name}</h3>
-                        <div className="bg-orange-50 px-2 py-1 rounded-lg ml-2">
-                          <span className="font-black text-orange-600 text-sm whitespace-nowrap">R$ {product.price.toFixed(2)}</span>
+          <div className="space-y-10">
+            {categories.map(cat => (
+              <div key={cat} id={`category-${cat}`} className="space-y-4 scroll-mt-32">
+                <div className="flex items-center gap-3">
+                  <h2 className="text-xl font-black text-slate-800 tracking-tight">{cat}</h2>
+                  <div className="h-px flex-1 bg-slate-100"></div>
+                </div>
+                <div className="grid grid-cols-1 gap-4">
+                  {products.filter(p => p.category === cat).map(product => (
+                    <div key={product.id} className="flex gap-3 p-2 rounded-2xl hover:bg-slate-50 transition-all group border border-transparent hover:border-slate-100 bg-white shadow-sm sm:shadow-none">
+                      <div className="relative w-20 h-20 sm:w-24 sm:h-24 flex-shrink-0">
+                        <img 
+                          src={product.imageUrl} 
+                          alt={product.name} 
+                          referrerPolicy="no-referrer"
+                          className="w-full h-full rounded-xl object-cover shadow-sm group-hover:scale-105 transition-transform"
+                        />
+                      </div>
+                      <div className="flex-1 flex flex-col justify-between py-0.5">
+                        <div>
+                          <div className="flex justify-between items-start">
+                            <h3 className="font-black text-slate-800 text-sm sm:text-base leading-tight pr-2">{product.name}</h3>
+                            <span className="font-black text-orange-600 text-sm whitespace-nowrap">R$ {product.price.toFixed(2)}</span>
+                          </div>
+                          <p className="text-[10px] sm:text-xs text-slate-400 leading-snug line-clamp-2 mt-1 font-medium">{product.description}</p>
+                        </div>
+                        <div className="flex justify-end mt-1">
+                          <button 
+                            onClick={() => addToCart(product)}
+                            className="bg-slate-900 text-white px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-orange-500 active:scale-95 transition-all"
+                          >
+                            Adicionar
+                          </button>
                         </div>
                       </div>
-                      <p className="text-xs text-slate-500 leading-snug line-clamp-2 mb-2">{product.description}</p>
-                      <button 
-                        onClick={() => addToCart(product)}
-                        className="bg-orange-500 text-white px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-orange-600 active:scale-95 transition-all"
-                      >
-                        Adicionar +
-                      </button>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
 
           <div className="py-8 text-center space-y-4">
               <div className="inline-block p-3 bg-slate-50 rounded-2xl border border-slate-200">
@@ -161,11 +231,11 @@ const CustomerMenu: React.FC<CustomerMenuProps> = ({ user }) => {
       {cart.length > 0 && (
         <button 
           onClick={() => setShowCart(true)}
-          className="fixed bottom-6 right-6 bg-orange-500 text-white p-4 rounded-full shadow-2xl flex items-center gap-3 animate-bounce-in z-50"
+          className="fixed bottom-20 right-4 bg-orange-500 text-white p-4 rounded-full shadow-2xl flex items-center gap-3 animate-bounce-in z-50 border-4 border-white"
         >
           <span className="text-2xl">🛒</span>
           <span className="font-black text-sm pr-2">R$ {total.toFixed(2)}</span>
-          <span className="absolute -top-2 -right-2 bg-slate-900 text-white w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black">
+          <span className="absolute -top-2 -right-2 bg-slate-900 text-white w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black border-2 border-white">
             {cart.reduce((a, b) => a + b.quantity, 0)}
           </span>
         </button>
@@ -210,7 +280,7 @@ const CustomerMenu: React.FC<CustomerMenuProps> = ({ user }) => {
                     isOrdering ? 'bg-slate-200 text-slate-400' : 'bg-orange-500 text-white hover:bg-orange-600 active:scale-95'
                   }`}
                 >
-                  {isOrdering ? 'Enviando...' : 'Confirmar Pedido'}
+                  {isOrdering ? 'Enviando...' : (businessWhatsapp ? 'Enviar via WhatsApp' : 'Confirmar Pedido')}
                 </button>
                 <p className="text-[9px] text-slate-400 text-center mt-4 font-bold uppercase tracking-widest">Pagamento na entrega</p>
               </div>
@@ -226,6 +296,8 @@ const CustomerMenu: React.FC<CustomerMenuProps> = ({ user }) => {
         .animate-slide-up { animation: slide-up 0.4s cubic-bezier(0.165, 0.84, 0.44, 1) forwards; }
         @keyframes bounce-in { 0% { transform: scale(0.9); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
         .animate-bounce-in { animation: bounce-in 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
       `}</style>
     </div>
   );

@@ -330,7 +330,7 @@ const POSPage: React.FC = () => {
             ))}
           </div>
 
-          <div className="grid grid-cols-3 sm:grid-cols-4 xl:grid-cols-5 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-5 gap-2">
             {filteredProducts.map(p => (
               <button
                 key={p.id}
@@ -344,7 +344,7 @@ const POSPage: React.FC = () => {
                     referrerPolicy="no-referrer"
                     className="w-full h-full object-cover transition-transform group-hover:scale-110" 
                   />
-                  <div className="absolute bottom-1 right-1 bg-orange-600 text-white px-2 py-1 rounded-lg text-xs font-black shadow-lg border border-white/20">
+                  <div className="absolute bottom-1 right-1 bg-orange-600 text-white px-1.5 py-0.5 rounded-lg text-[10px] font-black shadow-lg border border-white/20">
                     R$ {p.price.toFixed(2)}
                   </div>
                 </div>
@@ -633,6 +633,8 @@ const POSPage: React.FC = () => {
         .animate-slide-up { animation: slide-up 0.4s cubic-bezier(0.165, 0.84, 0.44, 1) forwards; }
         @keyframes bounce-in { 0% { transform: scale(0.95); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
         .animate-bounce-in { animation: bounce-in 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .scrollbar-thin::-webkit-scrollbar { width: 4px; }
         .scrollbar-thin::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }

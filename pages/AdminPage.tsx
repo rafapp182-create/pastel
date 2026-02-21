@@ -9,9 +9,10 @@ import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
 
 interface AdminPageProps {
   user: any;
+  setActiveTab: (tab: string) => void;
 }
 
-const AdminPage: React.FC<AdminPageProps> = ({ user }) => {
+const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [session, setSession] = useState<CashierSession | null>(null);
@@ -295,9 +296,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ user }) => {
                   </button>
                   <button 
                     onClick={() => {
-                      // Redireciona para a aba de POS no App (isso depende de como o estado é gerenciado, 
-                      // mas como estamos no AdminPage, podemos sugerir que ele use a aba principal)
-                      notify('Use a aba "Caixa" no menu inferior para operar as vendas.');
+                      setActiveTab('pos');
                     }}
                     className="flex-1 py-5 bg-slate-800 text-white font-black rounded-2xl shadow-xl hover:bg-slate-900 active:scale-95 transition-all text-lg"
                   >

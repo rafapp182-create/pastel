@@ -38,8 +38,14 @@ const App: React.FC = () => {
         // Inicia os ouvintes do banco de dados com base no papel do usuário
         db.start(loggedUser.role, loggedUser.id);
         
-        // Se for cliente, a aba padrão é o cardápio
-        if (loggedUser.role === 'customer') {
+        // Define a aba inicial com base no papel
+        if (loggedUser.role === 'admin') {
+          setActiveTab('admin');
+        } else if (loggedUser.role === 'caixa') {
+          setActiveTab('pos');
+        } else if (loggedUser.role === 'cozinha') {
+          setActiveTab('kitchen');
+        } else {
           setActiveTab('menu');
         }
       } else {
@@ -84,7 +90,7 @@ const App: React.FC = () => {
       case 'tables': return <TableManager />;
       case 'kitchen': return <KitchenPage />;
       case 'menu': return <CustomerMenu user={user} onLogout={handleLogout} />;
-      case 'admin': return <AdminPage user={user} />;
+      case 'admin': return <AdminPage user={user} setActiveTab={setActiveTab} />;
       case 'profile': return <ProfilePage user={user} onUpdateUser={setUser} />;
       default: return <POSPage />;
     }

@@ -54,6 +54,8 @@ const POSPage: React.FC = () => {
 
   const [isOpening, setIsOpening] = useState(false);
 
+  const [showOpenModal, setShowOpenModal] = useState(false);
+
   const handleOpenCashier = async () => {
     const val = parseFloat(openingValue);
     if (isNaN(val) || val < 0) {
@@ -63,6 +65,8 @@ const POSPage: React.FC = () => {
     setIsOpening(true);
     try {
       await db.openCashier(val);
+      setShowOpenModal(false);
+      setOpeningValue('');
       notify('Caixa aberto com sucesso!');
     } catch (error: any) {
       console.error("Erro ao abrir caixa:", error);
@@ -144,46 +148,58 @@ const POSPage: React.FC = () => {
     setShowPaymentModal(true);
   };
 
-  const handleFinishOrder = () => {
+  const handleFinishOrder = async () => {
     if (paymentType === PaymentType.DINHEIRO && (Number(amountReceived) < total || !amountReceived)) {
         return notify('Valor recebido insuficiente!', 'error');
     }
 
     setIsFinishing(true);
 
-    const hasKitchenItems = cart.some(item => {
-        const n = item.name.toLowerCase();
-        return n.includes('pastel') || n.includes('suco') || n.includes('cana');
-    });
-    
-    setTimeout(() => {
-      if (manualPayOrder) {
-        db.updateOrderPayment(manualPayOrder.id, paymentType, Number(amountReceived) || total, change);
-        setLastOrder(db.getOrderById(manualPayOrder.id) || null);
-        setManualPayOrder(null);
-      } else {
-        const order = db.createOrder({
-          items: cart,
-          total,
-          paymentType,
-          amountReceived: paymentType === PaymentType.DINHEIRO ? Number(amountReceived) : total,
-          change,
-          status: hasKitchenItems ? OrderStatus.NOVO : OrderStatus.PAGO,
-          tableNumber: tableNumber ? parseInt(tableNumber) : undefined,
-          customerName: customerName.trim() || undefined
-        });
-        setLastOrder(order);
+    try {
+      // Abre o caixa automaticamente se estiver fechado
+      if (!session) {
+        await db.openCashier(0); // Abre com 0 se for automático
+        notify('Caixa aberto automaticamente para esta venda.');
       }
 
-      setCart([]);
-      setAmountReceived('');
-      setTableNumber('');
-      setCustomerName('');
+      const hasKitchenItems = cart.some(item => {
+          const n = item.name.toLowerCase();
+          return n.includes('pastel') || n.includes('suco') || n.includes('cana');
+      });
+      
+      setTimeout(() => {
+        if (manualPayOrder) {
+          db.updateOrderPayment(manualPayOrder.id, paymentType, Number(amountReceived) || total, change);
+          setLastOrder(db.getOrderById(manualPayOrder.id) || null);
+          setManualPayOrder(null);
+        } else {
+          const order = db.createOrder({
+            items: cart,
+            total,
+            paymentType,
+            amountReceived: paymentType === PaymentType.DINHEIRO ? Number(amountReceived) : total,
+            change,
+            status: hasKitchenItems ? OrderStatus.NOVO : OrderStatus.PAGO,
+            tableNumber: tableNumber ? parseInt(tableNumber) : undefined,
+            customerName: customerName.trim() || undefined
+          });
+          setLastOrder(order);
+        }
+
+        setCart([]);
+        setAmountReceived('');
+        setTableNumber('');
+        setCustomerName('');
+        setIsFinishing(false);
+        setShowPaymentModal(false);
+        setShowReceipt(true);
+        notify('Venda finalizada!');
+      }, 800);
+    } catch (error: any) {
+      console.error("Erro ao finalizar venda:", error);
+      notify("Erro ao processar venda. Verifique o caixa.", "error");
       setIsFinishing(false);
-      setShowPaymentModal(false);
-      setShowReceipt(true);
-      notify('Venda finalizada!');
-    }, 800);
+    }
   };
 
   const markAsDeliveredOnly = (orderId: string) => {
@@ -233,40 +249,8 @@ const POSPage: React.FC = () => {
     ) : null
   );
 
-  if (!session) {
-    return (
-      <div className="flex items-center justify-center min-h-[70vh]">
-        <Toast />
-        <div className="bg-white p-8 rounded-[2rem] shadow-2xl border border-slate-100 max-w-md w-full text-center space-y-6 animate-fade-in">
-          <div className="w-20 h-20 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center mx-auto text-4xl shadow-inner">
-            💰
-          </div>
-          <h2 className="text-2xl font-black text-slate-800">Abrir Caixa</h2>
-          <div className="space-y-4">
-            <div className="relative">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">R$</span>
-              <input 
-                type="number"
-                placeholder="0,00"
-                value={openingValue}
-                onChange={(e) => setOpeningValue(e.target.value)}
-                className="w-full pl-12 pr-4 py-4 bg-slate-100 text-slate-900 border-none rounded-2xl outline-none font-black text-xl focus:ring-2 focus:ring-orange-500 transition-all"
-              />
-            </div>
-            <button 
-              onClick={handleOpenCashier}
-              disabled={isOpening}
-              className={`w-full py-4 rounded-2xl font-bold text-lg shadow-lg active:scale-95 transition-transform ${
-                isOpening ? 'bg-slate-300 cursor-not-allowed' : 'bg-orange-500 text-white hover:bg-orange-600'
-              }`}
-            >
-              {isOpening ? 'Abrindo...' : 'Iniciar Turno'}
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // Removido o bloqueio de tela se !session
+  // if (!session) { ... }
 
   const categories = ['Todos', ...Array.from(new Set(products.map(p => p.category)))];
   const filteredProducts = activeCategory === 'Todos' 
@@ -308,12 +292,23 @@ const POSPage: React.FC = () => {
         <div className="space-y-4 print:hidden">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-bold text-slate-800">Produtos</h2>
-            <button 
-              onClick={() => setShowCloseConfirm(true)}
-              className="text-[10px] bg-red-50 text-red-500 px-3 py-1.5 rounded-full font-bold uppercase hover:bg-red-500 hover:text-white transition-all shadow-sm"
-            >
-              Fechar Caixa
-            </button>
+            <div className="flex gap-2">
+              {!session ? (
+                <button 
+                  onClick={() => setShowOpenModal(true)}
+                  className="text-[10px] bg-green-50 text-green-600 px-3 py-1.5 rounded-full font-bold uppercase hover:bg-green-600 hover:text-white transition-all shadow-sm"
+                >
+                  Abrir Caixa
+                </button>
+              ) : (
+                <button 
+                  onClick={() => setShowCloseConfirm(true)}
+                  className="text-[10px] bg-red-50 text-red-500 px-3 py-1.5 rounded-full font-bold uppercase hover:bg-red-500 hover:text-white transition-all shadow-sm"
+                >
+                  Fechar Caixa
+                </button>
+              )}
+            </div>
           </div>
           
           <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
@@ -452,6 +447,39 @@ const POSPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {showOpenModal && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white p-8 rounded-[2rem] shadow-2xl max-w-sm w-full text-center space-y-6">
+            <div className="w-16 h-16 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center mx-auto text-3xl shadow-inner">
+              💰
+            </div>
+            <h3 className="text-xl font-bold text-slate-800">Abrir Caixa</h3>
+            <div className="space-y-4">
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">R$</span>
+                <input 
+                  type="number"
+                  placeholder="0,00"
+                  value={openingValue}
+                  onChange={(e) => setOpeningValue(e.target.value)}
+                  className="w-full pl-12 pr-4 py-4 bg-slate-100 text-slate-900 border-none rounded-2xl outline-none font-black text-xl focus:ring-2 focus:ring-orange-500 transition-all"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => setShowOpenModal(false)} className="flex-1 py-3 bg-slate-100 rounded-xl font-bold text-slate-600">Cancelar</button>
+                <button 
+                  onClick={handleOpenCashier}
+                  disabled={isOpening}
+                  className="flex-[2] py-3 bg-orange-500 text-white font-black rounded-xl shadow-lg"
+                >
+                  {isOpening ? 'Abrindo...' : 'Abrir'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showCloseConfirm && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">

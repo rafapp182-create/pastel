@@ -18,6 +18,8 @@ const TableManager: React.FC = () => {
   const [paymentType, setPaymentType] = useState<PaymentType>(PaymentType.CARTAO);
   const [amountReceived, setAmountReceived] = useState<string>('');
   const [isFinishing, setIsFinishing] = useState(false);
+  const [showReceipt, setShowReceipt] = useState(false);
+  const [lastOrder, setLastOrder] = useState<Order | null>(null);
 
   // Dividir Conta
   const [splitPeople, setSplitPeople] = useState<number>(1);
@@ -63,26 +65,31 @@ const TableManager: React.FC = () => {
     setIsEditingName(false);
   };
 
-  const addItemToComanda = (product: Product) => {
+  const addItemToComanda = async (product: Product) => {
     if (!selectedTable) return;
 
     let order = activeOrder;
     if (!order) {
-      order = db.createOrder({
-        items: [{ 
-          productId: product.id, 
-          name: product.name, 
-          description: product.description,
-          price: product.price, 
-          quantity: 1 
-        }],
-        total: product.price,
-        status: OrderStatus.NOVO,
-        tableNumber: selectedTable.number,
-        customerName: customerName.trim()
-      });
-      setActiveOrder(order);
-      notify(`Mesa ${selectedTable.number} aberta!`);
+      try {
+        const newOrder = await db.createOrder({
+          items: [{ 
+            productId: product.id, 
+            name: product.name, 
+            description: product.description,
+            price: product.price, 
+            quantity: 1 
+          }],
+          total: product.price,
+          status: OrderStatus.NOVO,
+          tableNumber: selectedTable.number,
+          customerName: customerName.trim()
+        });
+        setActiveOrder(newOrder);
+        notify(`Mesa ${selectedTable.number} aberta!`);
+      } catch (err) {
+        console.error("Erro ao abrir mesa:", err);
+        notify("Erro ao abrir mesa", "error");
+      }
     } else {
       const existingItems = [...order.items];
       const itemIndex = existingItems.findIndex(i => i.productId === product.id);
@@ -99,20 +106,25 @@ const TableManager: React.FC = () => {
         });
       }
       
-      db.updateOrderItems(order.id, existingItems);
-      notify(`${product.name} adicionado!`);
+      try {
+        await db.updateOrderItems(order.id, existingItems);
+        notify(`${product.name} adicionado!`);
+      } catch (err) {
+        console.error("Erro ao adicionar item:", err);
+        notify("Erro ao adicionar item", "error");
+      }
     }
   };
 
-  const handleSaveName = () => {
+  const handleSaveName = async () => {
     if (activeOrder) {
-      db.updateOrderCustomerName(activeOrder.id, customerName.trim());
+      await db.updateOrderCustomerName(activeOrder.id, customerName.trim());
       notify('Nome atualizado!');
     }
     setIsEditingName(false);
   };
 
-  const updateItemQuantity = (productId: string, delta: number) => {
+  const updateItemQuantity = async (productId: string, delta: number) => {
     if (!activeOrder) return;
     
     const updatedItems = activeOrder.items.map(item => {
@@ -126,13 +138,13 @@ const TableManager: React.FC = () => {
     if (updatedItems.length === 0) {
       setShowClearConfirm(true);
     } else {
-      db.updateOrderItems(activeOrder.id, updatedItems);
+      await db.updateOrderItems(activeOrder.id, updatedItems);
     }
   };
 
-  const handleClearTable = () => {
+  const handleClearTable = async () => {
     if (activeOrder) {
-      db.updateOrderStatus(activeOrder.id, OrderStatus.PAGO);
+      await db.updateOrderStatus(activeOrder.id, OrderStatus.PAGO);
       setSelectedTable(null);
       setActiveOrder(null);
       setShowClearConfirm(false);
@@ -171,20 +183,30 @@ const TableManager: React.FC = () => {
 
     setIsFinishing(true);
     
-    setTimeout(() => {
-      db.updateOrderPayment(
-        activeOrder.id,
-        paymentType,
-        paymentType === PaymentType.DINHEIRO ? Number(amountReceived) : total,
-        change
-      );
+    setTimeout(async () => {
+      try {
+        await db.updateOrderPayment(
+          activeOrder.id,
+          paymentType,
+          paymentType === PaymentType.DINHEIRO ? Number(amountReceived) : total,
+          change
+        );
 
-      setIsFinishing(false);
-      setShowPaymentModal(false);
-      setSelectedTable(null);
-      setActiveOrder(null);
-      setAmountReceived('');
-      notify('Pagamento realizado e mesa liberada!');
+        const finishedOrder = db.getOrderById(activeOrder.id);
+        setLastOrder(finishedOrder || null);
+        
+        setIsFinishing(false);
+        setShowPaymentModal(false);
+        setShowReceipt(true);
+        
+        // Limpeza dos estados da mesa será feita ao fechar o recibo
+        setAmountReceived('');
+        notify('Pagamento realizado!');
+      } catch (err) {
+        console.error("Erro ao processar pagamento:", err);
+        notify("Erro ao processar pagamento", "error");
+        setIsFinishing(false);
+      }
     }, 800);
   };
 
@@ -192,6 +214,17 @@ const TableManager: React.FC = () => {
     setSplitPeople(1);
     setShowSplitUI(false);
     setShowPaymentModal(true);
+  };
+
+  const handleCloseReceipt = () => {
+    setShowReceipt(false);
+    setSelectedTable(null);
+    setActiveOrder(null);
+    setLastOrder(null);
+  };
+
+  const handlePrint = () => {
+    window.print();
   };
 
   const categories = ['Todos', ...Array.from(new Set(products.map(p => p.category)))];
@@ -206,6 +239,54 @@ const TableManager: React.FC = () => {
           notification.type === 'error' ? 'bg-red-500' : 'bg-green-600'
         }`}>
           {notification.type === 'error' ? '❌ ' : '✅ '} {notification.message}
+        </div>
+      )}
+
+      {showReceipt && lastOrder && (
+        <div className="fixed inset-0 z-[500] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in print:bg-white print:p-0">
+          <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl p-8 flex flex-col space-y-6 overflow-hidden animate-bounce-in print:shadow-none print:max-w-none print:p-0">
+            <div id="thermal-receipt" className="text-center font-mono text-sm space-y-4 text-slate-900 border-2 border-dashed border-slate-200 p-6 bg-slate-50 print:bg-white print:border-none print:p-2">
+              <div className="border-b border-slate-300 pb-2 mb-2">
+                <h3 className="font-black text-lg uppercase tracking-tight">Hoje Pode Pastelaria</h3>
+                <p className="text-[10px] font-black tracking-[0.2em] text-slate-400">CUPOM NÃO FISCAL</p>
+              </div>
+              <p className="text-[10px] font-bold uppercase mb-2">Venda #{lastOrder.id.split('-')[1]}</p>
+              <div className="text-left text-[9px] space-y-1 mb-3">
+                <p>DATA: {new Date(lastOrder.createdAt).toLocaleString()}</p>
+                <p>MESA: {lastOrder.tableNumber || 'Balcão'}</p>
+                {lastOrder.customerName && <p>CLIENTE: {lastOrder.customerName}</p>}
+              </div>
+              <div className="border-y-2 border-slate-300 py-2 space-y-2">
+                {lastOrder.items.map((item, i) => (
+                  <div key={i} className="flex justify-between text-[11px] font-bold border-b border-slate-100 pb-1">
+                    <span className="flex-[3] text-left">{item.quantity}x {item.name}</span>
+                    <span className="flex-1 text-right">R$ {(item.price * item.quantity).toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="flex justify-between items-center font-black text-base py-2 border-t border-slate-300">
+                <span>TOTAL PAGO:</span>
+                <span>R$ {lastOrder.total.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-[10px] font-bold uppercase text-slate-500">
+                <span>FORMA:</span>
+                <span>{lastOrder.paymentType}</span>
+              </div>
+              {lastOrder.paymentType === 'dinheiro' && (
+                <div className="flex justify-between text-[10px] font-bold text-slate-400">
+                  <span>TROCO:</span>
+                  <span>R$ {lastOrder.change?.toFixed(2)}</span>
+                </div>
+              )}
+              <div className="text-[9px] text-slate-400 pt-2 border-t border-slate-200">
+                Obrigado pela preferência!
+              </div>
+            </div>
+            <div className="flex gap-3 print:hidden">
+              <button onClick={handlePrint} className="flex-1 bg-slate-800 text-white py-4 rounded-2xl font-black transition-all active:scale-95">Imprimir</button>
+              <button onClick={handleCloseReceipt} className="flex-1 bg-orange-500 text-white py-4 rounded-2xl font-black transition-all active:scale-95">Voltar</button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -324,48 +405,56 @@ const TableManager: React.FC = () => {
         </div>
       </div>
       
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-        {tables.map(table => {
-          const total = getTableTotal(table);
-          const name = getTableCustomer(table);
-          const isOccupied = table.status === TableStatus.OCUPADA;
-          const ready = isTableReady(table);
-          return (
-            <button 
-              key={table.id}
-              onClick={() => handleTableClick(table)}
-              className={`p-6 rounded-[2.5rem] border-2 transition-all flex flex-col items-center justify-center gap-2 group hover:scale-105 active:scale-95 relative ${
-                !isOccupied 
-                  ? 'bg-white border-slate-100 hover:border-orange-200' 
-                  : ready
-                    ? 'bg-green-500 border-green-600 text-white shadow-xl shadow-green-100'
-                    : 'bg-orange-500 border-orange-600 text-white shadow-xl shadow-orange-100'
-              }`}
-            >
-              <span className="text-4xl mb-1 transition-transform group-hover:scale-110">
-                {isOccupied ? (ready ? '✅' : '🥟') : '🍽️'}
-              </span>
-              <span className={`text-xl font-black ${!isOccupied ? 'text-slate-800' : 'text-white'}`}>
-                {table.number}
-              </span>
-              
-              {isOccupied && (
-                <div className="flex flex-col items-center gap-1">
-                   {ready && <span className="text-[10px] font-black uppercase tracking-widest bg-white text-green-600 px-2 py-0.5 rounded-full animate-pulse shadow-sm">PRONTO</span>}
-                   {name && <span className="text-[10px] font-bold truncate max-w-[80px] bg-white/20 px-2 rounded-full">{name}</span>}
-                   <div className="bg-white text-orange-600 px-3 py-1 rounded-full font-black text-xs shadow-sm">
-                      R$ {total.toFixed(2)}
-                   </div>
-                </div>
-              )}
+      {tables.length === 0 ? (
+        <div className="py-20 flex flex-col items-center justify-center text-slate-400 bg-white rounded-[3rem] border-4 border-dashed border-slate-100">
+          <span className="text-8xl mb-4 grayscale">🍽️</span>
+          <p className="text-xl font-black text-slate-300">Nenhuma mesa configurada!</p>
+          <p className="text-sm">O sistema está inicializando as mesas, por favor aguarde...</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+          {tables.map(table => {
+            const total = getTableTotal(table);
+            const name = getTableCustomer(table);
+            const isOccupied = table.status === TableStatus.OCUPADA;
+            const ready = isTableReady(table);
+            return (
+              <button 
+                key={table.id}
+                onClick={() => handleTableClick(table)}
+                className={`p-6 rounded-[2.5rem] border-2 transition-all flex flex-col items-center justify-center gap-2 group hover:scale-105 active:scale-95 relative ${
+                  !isOccupied 
+                    ? 'bg-white border-slate-100 hover:border-orange-200' 
+                    : ready
+                      ? 'bg-green-500 border-green-600 text-white shadow-xl shadow-green-100'
+                      : 'bg-orange-500 border-orange-600 text-white shadow-xl shadow-orange-100'
+                }`}
+              >
+                <span className="text-4xl mb-1 transition-transform group-hover:scale-110">
+                  {isOccupied ? (ready ? '✅' : '🥟') : '🍽️'}
+                </span>
+                <span className={`text-xl font-black ${!isOccupied ? 'text-slate-800' : 'text-white'}`}>
+                  {table.number}
+                </span>
+                
+                {isOccupied && (
+                  <div className="flex flex-col items-center gap-1">
+                     {ready && <span className="text-[10px] font-black uppercase tracking-widest bg-white text-green-600 px-2 py-0.5 rounded-full animate-pulse shadow-sm">PRONTO</span>}
+                     {name && <span className="text-[10px] font-bold truncate max-w-[80px] bg-white/20 px-2 rounded-full">{name}</span>}
+                     <div className="bg-white text-orange-600 px-3 py-1 rounded-full font-black text-xs shadow-sm">
+                        R$ {total.toFixed(2)}
+                     </div>
+                  </div>
+                )}
 
-              {!isOccupied && (
-                <span className="text-[9px] font-bold uppercase text-slate-400 mt-1">Vazio</span>
-              )}
-            </button>
-          );
-        })}
-      </div>
+                {!isOccupied && (
+                  <span className="text-[9px] font-bold uppercase text-slate-400 mt-1">Vazio</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 mt-8">
           <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">Estatísticas</h3>
@@ -540,6 +629,12 @@ const TableManager: React.FC = () => {
       )}
 
       <style>{`
+        @page { size: 80mm auto; margin: 0; }
+        @media print {
+          body * { visibility: hidden; }
+          #thermal-receipt, #thermal-receipt * { visibility: visible; }
+          #thermal-receipt { position: absolute; left: 0; top: 0; width: 80mm; padding: 5mm; background: white; font-family: 'Courier New', monospace; }
+        }
         @keyframes slide-in { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
         .animate-slide-in { animation: slide-in 0.3s ease-out forwards; }
         @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
@@ -552,6 +647,8 @@ const TableManager: React.FC = () => {
           100% { transform: scale(1); opacity: 1; }
         }
         .animate-bounce-in { animation: bounce-in 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        @keyframes slide-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        .animate-slide-up { animation: slide-up 0.4s cubic-bezier(0.165, 0.84, 0.44, 1) forwards; }
       `}</style>
     </div>
   );

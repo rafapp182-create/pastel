@@ -49,6 +49,8 @@ class FirebaseDatabase {
   private listeners: Set<() => void> = new Set();
   private initialized = false;
   private activeUnsubs: (() => void)[] = [];
+  private isSeedingProducts = false;
+  private isSeedingTables = false;
 
   constructor() {
     // Não inicia mais no construtor para evitar erros de permissão antes do login
@@ -63,16 +65,20 @@ class FirebaseDatabase {
     // Produtos são públicos
     const unsubProducts = onSnapshot(collection(firestore, "products"), (snapshot) => {
       this.products = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Product));
-      if (this.products.length === 0 && !this.initialized) this.seedProducts();
+      if (this.products.length === 0) {
+        this.seedProducts();
+      }
       this.notify();
     });
     this.activeUnsubs.push(unsubProducts);
 
     // Mesas são para Staff
-    if (role === 'admin' || role === 'caixa') {
+    if (role === 'admin' || role === 'caixa' || role === 'cozinha') {
       const unsubTables = onSnapshot(collection(firestore, "tables"), (snapshot) => {
         this.tables = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Table)).sort((a,b) => a.number - b.number);
-        if (this.tables.length === 0 && !this.initialized) this.seedTables();
+        if (this.tables.length === 0) {
+          this.seedTables();
+        }
         this.notify();
       });
       this.activeUnsubs.push(unsubTables);
@@ -119,18 +125,30 @@ class FirebaseDatabase {
   }
 
   private async seedProducts() {
-    console.log("Seeding initial products...");
-    for (const p of initialProducts) {
-      const { id, ...data } = p;
-      await setDoc(doc(firestore, "products", id), data);
+    if (this.isSeedingProducts) return;
+    this.isSeedingProducts = true;
+    try {
+      console.log("Seeding initial products...");
+      for (const p of initialProducts) {
+        const { id, ...data } = p;
+        await setDoc(doc(firestore, "products", id), data);
+      }
+    } finally {
+      this.isSeedingProducts = false;
     }
   }
 
   private async seedTables() {
-    console.log("Seeding initial tables...");
-    for (const t of initialTables) {
-      const { id, ...data } = t;
-      await setDoc(doc(firestore, "tables", id), data);
+    if (this.isSeedingTables) return;
+    this.isSeedingTables = true;
+    try {
+      console.log("Seeding initial tables...");
+      for (const t of initialTables) {
+        const { id, ...data } = t;
+        await setDoc(doc(firestore, "tables", id), data);
+      }
+    } finally {
+      this.isSeedingTables = false;
     }
   }
 
@@ -237,11 +255,21 @@ class FirebaseDatabase {
       };
     });
 
+    // Se não houver sessão ativa em memória, tenta buscar a mais recente aberta
+    let sessionId = this.currentSession?.id;
+    if (!sessionId) {
+      const q = query(collection(firestore, "sessions"), where("status", "==", "open"), limit(1));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        sessionId = snap.docs[0].id;
+      }
+    }
+
     const orderData = {
       ...order,
       items: itemsWithDescription,
       createdAt: Date.now(),
-      sessionId: this.currentSession?.id || 'manual'
+      sessionId: sessionId || 'manual'
     };
 
     const docRef = await addDoc(collection(firestore, "orders"), orderData);

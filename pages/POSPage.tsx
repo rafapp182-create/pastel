@@ -167,13 +167,13 @@ const POSPage: React.FC = () => {
           return n.includes('pastel') || n.includes('suco') || n.includes('cana');
       });
       
-      setTimeout(() => {
+      setTimeout(async () => {
         if (manualPayOrder) {
-          db.updateOrderPayment(manualPayOrder.id, paymentType, Number(amountReceived) || total, change);
+          await db.updateOrderPayment(manualPayOrder.id, paymentType, Number(amountReceived) || total, change);
           setLastOrder(db.getOrderById(manualPayOrder.id) || null);
           setManualPayOrder(null);
         } else {
-          const order = db.createOrder({
+          const order = await db.createOrder({
             items: cart,
             total,
             paymentType,
@@ -213,7 +213,7 @@ const POSPage: React.FC = () => {
 
   const getSessionSummary = () => {
     if (!session) return null;
-    const sessionOrders = db.getOrders().filter(o => o.sessionId === session.id && o.status === OrderStatus.PAGO);
+    const sessionOrders = db.getOrders().filter(o => o.sessionId === session.id && o.paymentType);
     
     const totals = {
       [PaymentType.DINHEIRO]: 0,
@@ -251,6 +251,30 @@ const POSPage: React.FC = () => {
 
   // Removido o bloqueio de tela se !session
   // if (!session) { ... }
+
+  // Se o caixa estiver fechado, mostra uma tela de bloqueio amigável para abertura
+  if (!session && !showOpenModal) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[calc(100vh-120px)] bg-slate-50 animate-fade-in">
+        <div className="bg-white p-12 rounded-[3rem] shadow-2xl border border-slate-100 text-center space-y-8 max-w-md mx-auto">
+          <div className="w-24 h-24 bg-red-50 text-red-500 rounded-[2rem] flex items-center justify-center mx-auto text-5xl shadow-inner animate-pulse">
+            🔒
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-3xl font-black text-slate-800">Caixa Fechado</h2>
+            <p className="text-slate-500 font-medium">Para iniciar as vendas e operações do dia, você precisa abrir o caixa.</p>
+          </div>
+          <button 
+            onClick={() => setShowOpenModal(true)}
+            className="w-full py-5 bg-orange-500 text-white font-black rounded-2xl shadow-xl hover:bg-orange-600 active:scale-95 transition-all text-xl flex items-center justify-center gap-3"
+          >
+            <span>🔓</span> Abrir Caixa Agora
+          </button>
+        </div>
+        <Toast />
+      </div>
+    );
+  }
 
   const categories = ['Todos', ...Array.from(new Set(products.map(p => p.category)))];
   const filteredProducts = activeCategory === 'Todos' 
@@ -618,7 +642,10 @@ const POSPage: React.FC = () => {
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in print:bg-white print:p-0">
           <div className="bg-white w-full max-sm rounded-3xl shadow-2xl p-8 flex flex-col space-y-6 overflow-hidden print:p-0">
             <div id="thermal-receipt" className="text-center font-mono text-sm space-y-4 text-slate-900 border-2 border-dashed border-slate-200 p-6 bg-slate-50 print:p-2 print:border-none print:bg-white">
-              <h3 className="font-black text-lg uppercase tracking-tight">Hoje Pode Pastelaria</h3>
+              <div className="border-b border-slate-300 pb-2 mb-2">
+                <h3 className="font-black text-lg uppercase tracking-tight">Hoje Pode Pastelaria</h3>
+                <p className="text-[10px] font-black tracking-[0.2em] text-slate-400">CUPOM NÃO FISCAL</p>
+              </div>
               <p className="text-[10px] font-bold uppercase mb-2">Venda #{lastOrder.id.split('-')[1]}</p>
               <div className="text-left text-[9px] space-y-1 mb-3">
                 <p>DATA: {new Date(lastOrder.createdAt).toLocaleString()}</p>
@@ -635,10 +662,20 @@ const POSPage: React.FC = () => {
                   </div>
                 ))}
               </div>
-              <div className="flex justify-between items-center font-black text-base py-2">
+              <div className="flex justify-between items-center font-black text-base py-2 border-t border-slate-300">
                 <span>TOTAL PAGO:</span>
                 <span>R$ {lastOrder.total.toFixed(2)}</span>
               </div>
+              <div className="flex justify-between text-[10px] font-bold uppercase text-slate-500">
+                <span>FORMA:</span>
+                <span>{lastOrder.paymentType}</span>
+              </div>
+              {lastOrder.paymentType === 'dinheiro' && (
+                <div className="flex justify-between text-[10px] font-bold text-slate-400">
+                  <span>TROCO:</span>
+                  <span>R$ {lastOrder.change?.toFixed(2)}</span>
+                </div>
+              )}
             </div>
             <div className="flex gap-3 print:hidden">
               <button onClick={handlePrint} className="flex-1 bg-slate-800 text-white py-4 rounded-2xl font-black">Imprimir</button>

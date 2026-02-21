@@ -35,9 +35,6 @@ const App: React.FC = () => {
         };
         setUser(loggedUser);
         
-        // Inicia os ouvintes do banco de dados com base no papel do usuário
-        db.start(loggedUser.role, loggedUser.id);
-        
         // Define a aba inicial com base no papel
         if (loggedUser.role === 'admin') {
           setActiveTab('admin');
@@ -59,6 +56,14 @@ const App: React.FC = () => {
 
     return () => unsubscribe();
   }, []);
+
+  // Efeito separado para iniciar o banco de dados quando o usuário ou seu papel mudar
+  useEffect(() => {
+    if (user) {
+      console.log("Iniciando/Reiniciando DB para:", user.role);
+      db.start(user.role, user.id);
+    }
+  }, [user?.id, user?.role]);
 
   const handleLogout = async () => {
     await signOut(auth);

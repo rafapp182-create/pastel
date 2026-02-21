@@ -278,35 +278,50 @@ const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
             </div>
 
             {!session ? (
-              <div className="space-y-6 max-w-md">
-                <div className="space-y-2">
-                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Valor de Abertura (Fundo de Caixa)</label>
-                  <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">R$</span>
-                    <input 
-                      type="number"
-                      placeholder="0,00"
-                      value={openingValue}
-                      onChange={(e) => setOpeningValue(e.target.value)}
-                      className="w-full pl-12 pr-4 py-4 bg-slate-100 text-slate-900 border-none rounded-2xl outline-none font-black text-xl focus:ring-2 focus:ring-orange-500 transition-all"
-                    />
+              <div className="space-y-8 max-w-md mx-auto py-10">
+                <div className="text-center space-y-4 mb-8">
+                  <div className="w-20 h-20 bg-red-50 text-red-500 rounded-[2rem] flex items-center justify-center mx-auto text-4xl shadow-inner">
+                    🔒
                   </div>
+                  <h3 className="text-2xl font-black text-slate-800">Caixa Fechado</h3>
+                  <p className="text-slate-400 text-sm font-medium">Defina o fundo de caixa para iniciar o turno.</p>
                 </div>
-                <button 
-                  onClick={async () => {
-                    const val = parseFloat(openingValue);
-                    if (isNaN(val) || val < 0) return notify('Valor inválido', 'error');
-                    setIsOpening(true);
-                    await db.openCashier(val);
-                    setIsOpening(false);
-                    setOpeningValue('');
-                    notify('Caixa aberto!');
-                  }}
-                  disabled={isOpening}
-                  className="w-full py-5 bg-orange-500 text-white font-black rounded-2xl shadow-xl hover:bg-orange-600 active:scale-95 transition-all text-lg"
-                >
-                  {isOpening ? 'Abrindo...' : 'Abrir Caixa'}
-                </button>
+
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Valor de Abertura (Fundo de Caixa)</label>
+                    <div className="relative">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">R$</span>
+                      <input 
+                        type="number"
+                        placeholder="0,00"
+                        value={openingValue}
+                        onChange={(e) => setOpeningValue(e.target.value)}
+                        className="w-full pl-12 pr-4 py-5 bg-slate-100 text-slate-900 border-none rounded-2xl outline-none font-black text-2xl focus:ring-2 focus:ring-orange-500 transition-all"
+                      />
+                    </div>
+                  </div>
+                  <button 
+                    onClick={async () => {
+                      const val = parseFloat(openingValue);
+                      if (isNaN(val) || val < 0) return notify('Valor inválido', 'error');
+                      setIsOpening(true);
+                      try {
+                        await db.openCashier(val);
+                        setOpeningValue('');
+                        notify('Caixa aberto com sucesso!');
+                      } catch (err: any) {
+                        notify('Erro ao abrir: ' + err.message, 'error');
+                      } finally {
+                        setIsOpening(false);
+                      }
+                    }}
+                    disabled={isOpening}
+                    className="w-full py-5 bg-orange-500 text-white font-black rounded-2xl shadow-xl hover:bg-orange-600 active:scale-95 transition-all text-xl"
+                  >
+                    {isOpening ? 'Abrindo...' : 'Abrir Caixa'}
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="space-y-8">
@@ -361,13 +376,13 @@ const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
                 <div className="space-y-1">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Vendido</p>
                   <p className="text-2xl font-black text-slate-900">
-                    R$ {orders.filter(o => o.sessionId === session.id && o.status === 'pago').reduce((a, b) => a + b.total, 0).toFixed(2)}
+                    R$ {orders.filter(o => o.sessionId === session.id && o.paymentType).reduce((a, b) => a + b.total, 0).toFixed(2)}
                   </p>
                 </div>
                 <div className="space-y-1">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Pedidos Pagos</p>
                   <p className="text-2xl font-black text-slate-900">
-                    {orders.filter(o => o.sessionId === session.id && o.status === 'pago').length}
+                    {orders.filter(o => o.sessionId === session.id && o.paymentType).length}
                   </p>
                 </div>
                 <div className="space-y-1">

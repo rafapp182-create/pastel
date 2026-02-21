@@ -1,7 +1,7 @@
 
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
-import { getAuth } from "firebase/auth";
+import { getAuth, setPersistence, browserLocalPersistence } from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: "AIzaSyA3hV7eZwMBQerN1qLoxlKL0OgUXH0MEUU",
@@ -15,3 +15,8 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 export const firestore = getFirestore(app);
 export const auth = getAuth(app);
+
+// Garante que a sessão persista mesmo em iframes
+setPersistence(auth, browserLocalPersistence).catch(err => {
+  console.error("Erro ao configurar persistência:", err);
+});

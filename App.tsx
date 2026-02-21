@@ -71,14 +71,14 @@ const App: React.FC = () => {
 
     // Se for cliente, renderiza apenas o cardápio
     if (user.role === 'customer') {
-      return <CustomerMenu user={user} />;
+      return <CustomerMenu user={user} onLogout={handleLogout} />;
     }
 
     switch (activeTab) {
       case 'pos': return <POSPage />;
       case 'tables': return <TableManager />;
       case 'kitchen': return <KitchenPage />;
-      case 'menu': return <CustomerMenu user={user} />;
+      case 'menu': return <CustomerMenu user={user} onLogout={handleLogout} />;
       case 'admin': return <AdminPage user={user} />;
       case 'profile': return <ProfilePage user={user} onUpdateUser={setUser} />;
       default: return <POSPage />;

@@ -16,16 +16,19 @@ const AdminPage: React.FC<AdminPageProps> = ({ user }) => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [session, setSession] = useState<CashierSession | null>(null);
   const [users, setUsers] = useState<any[]>([]);
-  const [activeSubTab, setActiveSubTab] = useState<'stats' | 'inventory' | 'history' | 'users' | 'settings'>('stats');
+  const [activeSubTab, setActiveSubTab] = useState<'stats' | 'inventory' | 'history' | 'users' | 'settings' | 'cashier'>('stats');
   const [expandedDate, setExpandedDate] = useState<string | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [bannerUrl, setBannerUrl] = useState('');
   const [businessWhatsapp, setBusinessWhatsapp] = useState('');
+  const [openingValue, setOpeningValue] = useState('');
+  const [isOpening, setIsOpening] = useState(false);
 
   const isAdmin = user?.role === 'admin';
 
   const tabs = [
     { id: 'stats', label: 'Resumo', icon: '📊', adminOnly: false },
+    { id: 'cashier', label: 'Caixa', icon: '💰', adminOnly: false },
     { id: 'inventory', label: 'Produtos', icon: '🥟', adminOnly: false },
     { id: 'history', label: 'Histórico', icon: '📜', adminOnly: false },
     { id: 'users', label: 'Equipe', icon: '👥', adminOnly: true },
@@ -215,6 +218,122 @@ const AdminPage: React.FC<AdminPageProps> = ({ user }) => {
             <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Itens Ativos</p>
             <h3 className="text-3xl font-black text-slate-900">{products.length}</h3>
           </div>
+        </div>
+      )}
+
+      {/* ABA: GESTÃO DE CAIXA */}
+      {activeSubTab === 'cashier' && (
+        <div className="space-y-6 animate-fade-in">
+          <div className="bg-white p-8 rounded-[2.5rem] shadow-lg border border-slate-100">
+            <div className="flex items-center gap-4 mb-8">
+              <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-3xl shadow-inner ${session ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                {session ? '🔓' : '🔒'}
+              </div>
+              <div>
+                <h2 className="text-2xl font-black text-slate-800">Gestão do Caixa</h2>
+                <p className="text-xs font-bold uppercase tracking-widest text-slate-400">
+                  Status: <span className={session ? 'text-green-600' : 'text-red-600'}>{session ? 'ABERTO' : 'FECHADO'}</span>
+                </p>
+              </div>
+            </div>
+
+            {!session ? (
+              <div className="space-y-6 max-w-md">
+                <div className="space-y-2">
+                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Valor de Abertura (Fundo de Caixa)</label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">R$</span>
+                    <input 
+                      type="number"
+                      placeholder="0,00"
+                      value={openingValue}
+                      onChange={(e) => setOpeningValue(e.target.value)}
+                      className="w-full pl-12 pr-4 py-4 bg-slate-100 text-slate-900 border-none rounded-2xl outline-none font-black text-xl focus:ring-2 focus:ring-orange-500 transition-all"
+                    />
+                  </div>
+                </div>
+                <button 
+                  onClick={async () => {
+                    const val = parseFloat(openingValue);
+                    if (isNaN(val) || val < 0) return notify('Valor inválido', 'error');
+                    setIsOpening(true);
+                    await db.openCashier(val);
+                    setIsOpening(false);
+                    setOpeningValue('');
+                    notify('Caixa aberto!');
+                  }}
+                  disabled={isOpening}
+                  className="w-full py-5 bg-orange-500 text-white font-black rounded-2xl shadow-xl hover:bg-orange-600 active:scale-95 transition-all text-lg"
+                >
+                  {isOpening ? 'Abrindo...' : 'Abrir Caixa'}
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-8">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Aberto em</p>
+                    <p className="font-bold text-slate-800">{new Date(session.startTime).toLocaleString()}</p>
+                  </div>
+                  <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Fundo Inicial</p>
+                    <p className="font-black text-orange-600 text-xl">R$ {session.initialAmount.toFixed(2)}</p>
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <button 
+                    onClick={() => {
+                      if (window.confirm('Deseja realmente fechar o caixa?')) {
+                        db.closeCashier();
+                        notify('Caixa fechado!');
+                      }
+                    }}
+                    className="flex-1 py-5 bg-red-500 text-white font-black rounded-2xl shadow-xl hover:bg-red-600 active:scale-95 transition-all text-lg"
+                  >
+                    Fechar Caixa
+                  </button>
+                  <button 
+                    onClick={() => {
+                      // Redireciona para a aba de POS no App (isso depende de como o estado é gerenciado, 
+                      // mas como estamos no AdminPage, podemos sugerir que ele use a aba principal)
+                      notify('Use a aba "Caixa" no menu inferior para operar as vendas.');
+                    }}
+                    className="flex-1 py-5 bg-slate-800 text-white font-black rounded-2xl shadow-xl hover:bg-slate-900 active:scale-95 transition-all text-lg"
+                  >
+                    Ir para Operação (PDV)
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Resumo Rápido da Sessão Atual se aberta */}
+          {session && (
+            <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
+              <h3 className="text-lg font-black text-slate-800 mb-6 uppercase tracking-tight">Vendas da Sessão Atual</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                <div className="space-y-1">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Vendido</p>
+                  <p className="text-2xl font-black text-slate-900">
+                    R$ {orders.filter(o => o.sessionId === session.id && o.status === 'pago').reduce((a, b) => a + b.total, 0).toFixed(2)}
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Pedidos Pagos</p>
+                  <p className="text-2xl font-black text-slate-900">
+                    {orders.filter(o => o.sessionId === session.id && o.status === 'pago').length}
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Pedidos Pendentes</p>
+                  <p className="text-2xl font-black text-orange-600">
+                    {orders.filter(o => o.sessionId === session.id && o.status !== 'pago').length}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

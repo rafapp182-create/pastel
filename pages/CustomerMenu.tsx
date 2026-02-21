@@ -5,9 +5,10 @@ import { Product, OrderItem, OrderStatus } from '../types';
 
 interface CustomerMenuProps {
   user?: any;
+  onLogout?: () => void;
 }
 
-const CustomerMenu: React.FC<CustomerMenuProps> = ({ user }) => {
+const CustomerMenu: React.FC<CustomerMenuProps> = ({ user, onLogout }) => {
   const [products, setProducts] = useState<Product[]>([]);
   const [bannerUrl, setBannerUrl] = useState('https://picsum.photos/seed/pastel-hero/800/400');
   const [businessWhatsapp, setBusinessWhatsapp] = useState('');
@@ -152,17 +153,24 @@ const CustomerMenu: React.FC<CustomerMenuProps> = ({ user }) => {
 
   return (
     <div className="max-w-2xl mx-auto bg-white min-h-screen pb-32 relative">
-      <div className="relative h-40 sm:h-48 overflow-hidden">
-        <img 
-          src={bannerUrl} 
-          alt="Banner" 
-          referrerPolicy="no-referrer"
-          className="w-full h-full object-cover brightness-50"
-        />
-        <div className="absolute inset-0 flex flex-col items-center justify-center text-white text-center p-6">
-          <h1 className="text-3xl font-black italic drop-shadow-lg">Hoje Pode!</h1>
-          <p className="text-sm sm:text-base opacity-90 font-medium drop-shadow-md">Os melhores pastéis da cidade 🥟</p>
+      <div className="bg-orange-500 p-6 text-white flex items-center justify-between shadow-lg">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center text-xl shadow-inner">🥟</div>
+          <div>
+            <h1 className="text-xl font-black tracking-tight leading-none">Hoje Pode!</h1>
+            <p className="text-[10px] font-bold uppercase tracking-widest opacity-70 mt-1">Os melhores pastéis 🥟</p>
+          </div>
         </div>
+        {onLogout && (
+          <button 
+            onClick={onLogout}
+            className="p-2 hover:bg-orange-600 rounded-full transition-colors text-lg flex items-center gap-2"
+            title="Sair"
+          >
+            <span className="text-xs font-black uppercase tracking-widest hidden sm:block">Sair</span>
+            <span>🚪</span>
+          </button>
+        )}
       </div>
 
       {/* Sticky Category Nav */}

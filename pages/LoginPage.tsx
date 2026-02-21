@@ -111,13 +111,15 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
     } catch (err: any) {
       console.error("Erro Google Login:", err);
       if (err.code === 'auth/popup-blocked') {
-        setError('O popup foi bloqueado pelo navegador. Por favor, permita popups para este site.');
+        setError('O popup foi bloqueado. Clique no ícone de bloqueio na barra de endereços e permita popups.');
       } else if (err.code === 'auth/operation-not-allowed') {
-        setError('O login com Google não está ativado no Firebase Console.');
+        setError('O login com Google não está ativado no Firebase (Authentication > Sign-in method).');
       } else if (err.code === 'auth/unauthorized-domain') {
-        setError('Este domínio não está autorizado no Firebase Console.');
+        setError('Este domínio não está autorizado no Firebase (Authentication > Settings > Authorized domains).');
+      } else if (err.code === 'auth/internal-error' || err.code === 'auth/network-request-failed') {
+        setError('Erro de conexão ou cookies de terceiros bloqueados. Tente usar uma aba anônima ou outro navegador.');
       } else {
-        setError(`Erro ao entrar com Google: ${err.message || 'Tente novamente.'}`);
+        setError(`Erro (${err.code}): ${err.message || 'Tente novamente.'}`);
       }
     } finally {
       setLoading(false);

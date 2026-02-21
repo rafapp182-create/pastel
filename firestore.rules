@@ -9,30 +9,25 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Busca o papel do usuário na coleção 'users' de forma segura
+    // Busca o papel do usuário na coleção 'users'
     function getRole() {
-      let userPath = /databases/$(database)/documents/users/$(request.auth.uid);
-      return exists(userPath) ? get(userPath).data.role : 'customer';
-    }
-
-    function hasRole(role) {
-      return isSignedIn() && getRole() == role;
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
     }
 
     function isAdmin() {
-      return hasRole('admin');
+      return isSignedIn() && getRole() == 'admin';
     }
 
     function isCaixa() {
-      return hasRole('caixa');
+      return isSignedIn() && getRole() == 'caixa';
     }
 
     function isCozinha() {
-      return hasRole('cozinha');
+      return isSignedIn() && getRole() == 'cozinha';
     }
 
     function isCustomer() {
-      return hasRole('customer');
+      return isSignedIn() && getRole() == 'customer';
     }
 
     function isStaff() {

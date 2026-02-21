@@ -23,6 +23,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
   const [whatsapp, setWhatsapp] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isAdminRegistration, setIsAdminRegistration] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -145,7 +146,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
       const newUserProfile = {
         name: name.trim(),
         email: cleanEmail,
-        role: UserRole.CUSTOMER,
+        role: isAdminRegistration ? UserRole.ADMIN : UserRole.CUSTOMER,
         address: address.trim(),
         whatsapp: whatsapp.trim(),
         createdAt: Date.now()
@@ -203,6 +204,23 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
           <form onSubmit={isRegistering ? handleRegister : handleLogin} className="space-y-4">
             {isRegistering && (
               <>
+                <div className="flex items-center gap-2 p-3 bg-slate-50 rounded-2xl border border-slate-100 mb-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsAdminRegistration(false)}
+                    className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${!isAdminRegistration ? 'bg-white shadow-sm text-orange-600' : 'text-slate-400'}`}
+                  >
+                    Cliente
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsAdminRegistration(true)}
+                    className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${isAdminRegistration ? 'bg-white shadow-sm text-orange-600' : 'text-slate-400'}`}
+                  >
+                    Administrador
+                  </button>
+                </div>
+
                 <div className="space-y-1">
                   <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Nome Completo</label>
                   <input 

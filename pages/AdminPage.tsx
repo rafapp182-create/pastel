@@ -132,9 +132,10 @@ const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
     
     setIsCreatingUser(true);
     const cleanEmail = newUser.email.trim();
+    const appName = `Secondary-${Date.now()}`;
 
     try {
-      const secondaryApp = initializeApp(auth.app.options, 'Secondary');
+      const secondaryApp = initializeApp(auth.app.options, appName);
       const secondaryAuth = getAuth(secondaryApp);
       
       const userCredential = await createUserWithEmailAndPassword(secondaryAuth, cleanEmail, newUser.password);
@@ -149,18 +150,25 @@ const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
 
       setNewUser({ name: '', email: '', password: '', role: UserRole.CAIXA });
       notify('Usuário criado com sucesso!');
-      secondaryApp.delete();
+      await secondaryApp.delete();
     } catch (err: any) {
-      notify('Erro ao criar usuário: ' + (err.message || 'Verifique os dados.'), 'error');
+      console.error("Erro ao criar usuário:", err);
+      notify('Erro: ' + (err.message || 'Verifique os dados.'), 'error');
     } finally {
       setIsCreatingUser(false);
     }
   };
 
   const handleDeleteUser = async (userId: string) => {
+    if (userId === user.id) return notify('Você não pode remover seu próprio acesso.', 'error');
     if (window.confirm('Deseja remover este acesso?')) {
-      await deleteDoc(doc(firestore, "users", userId));
-      notify('Acesso removido.');
+      try {
+        await deleteDoc(doc(firestore, "users", userId));
+        notify('Acesso removido.');
+      } catch (err: any) {
+        console.error("Erro ao deletar usuário:", err);
+        notify('Erro ao remover: ' + err.message, 'error');
+      }
     }
   };
 

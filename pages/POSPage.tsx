@@ -158,8 +158,13 @@ const POSPage: React.FC = () => {
     try {
       // Abre o caixa automaticamente se estiver fechado
       if (!session) {
-        await db.openCashier(0); // Abre com 0 se for automático
-        notify('Caixa aberto automaticamente para esta venda.');
+        try {
+          await db.openCashier(0); // Abre com 0 se for automático
+          notify('Caixa aberto automaticamente para esta venda.');
+        } catch (err: any) {
+          console.error("Erro ao abrir caixa automaticamente:", err);
+          return notify('Erro ao abrir caixa. Verifique permissões.', 'error');
+        }
       }
 
       const hasKitchenItems = cart.some(item => {
@@ -167,13 +172,14 @@ const POSPage: React.FC = () => {
           return n.includes('pastel') || n.includes('suco') || n.includes('cana');
       });
       
-      setTimeout(async () => {
+      let order;
+      try {
         if (manualPayOrder) {
           await db.updateOrderPayment(manualPayOrder.id, paymentType, Number(amountReceived) || total, change);
-          setLastOrder(db.getOrderById(manualPayOrder.id) || null);
+          order = db.getOrderById(manualPayOrder.id);
           setManualPayOrder(null);
         } else {
-          const order = await db.createOrder({
+          order = await db.createOrder({
             items: cart,
             total,
             paymentType,
@@ -183,21 +189,24 @@ const POSPage: React.FC = () => {
             tableNumber: tableNumber ? parseInt(tableNumber) : undefined,
             customerName: customerName.trim() || undefined
           });
-          setLastOrder(order);
         }
+      } catch (err: any) {
+        console.error("Erro ao registrar pedido:", err);
+        return notify('Erro ao registrar pedido no banco.', 'error');
+      }
 
-        setCart([]);
-        setAmountReceived('');
-        setTableNumber('');
-        setCustomerName('');
-        setIsFinishing(false);
-        setShowPaymentModal(false);
-        setShowReceipt(true);
-        notify('Venda finalizada!');
-      }, 800);
+      setLastOrder(order || null);
+      setCart([]);
+      setAmountReceived('');
+      setTableNumber('');
+      setCustomerName('');
+      setIsFinishing(false);
+      setShowPaymentModal(false);
+      setShowReceipt(true);
+      notify('Venda finalizada com sucesso!');
     } catch (error: any) {
-      console.error("Erro ao finalizar venda:", error);
-      notify("Erro ao processar venda. Verifique o caixa.", "error");
+      console.error("Erro inesperado ao finalizar venda:", error);
+      notify("Erro inesperado. Tente novamente.", "error");
       setIsFinishing(false);
     }
   };

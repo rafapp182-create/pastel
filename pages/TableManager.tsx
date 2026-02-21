@@ -175,7 +175,7 @@ const TableManager: React.FC = () => {
     ? Math.max(0, Number(amountReceived) - total) 
     : 0;
 
-  const handleFinishPayment = () => {
+  const handleFinishPayment = async () => {
     if (!activeOrder) return;
     if (paymentType === PaymentType.DINHEIRO && (Number(amountReceived) < total || !amountReceived)) {
       return notify('Valor recebido insuficiente!', 'error');
@@ -183,7 +183,7 @@ const TableManager: React.FC = () => {
 
     setIsFinishing(true);
     
-    setTimeout(async () => {
+    try {
       try {
         await db.updateOrderPayment(
           activeOrder.id,
@@ -191,23 +191,26 @@ const TableManager: React.FC = () => {
           paymentType === PaymentType.DINHEIRO ? Number(amountReceived) : total,
           change
         );
-
-        const finishedOrder = db.getOrderById(activeOrder.id);
-        setLastOrder(finishedOrder || null);
-        
-        setIsFinishing(false);
-        setShowPaymentModal(false);
-        setShowReceipt(true);
-        
-        // Limpeza dos estados da mesa será feita ao fechar o recibo
-        setAmountReceived('');
-        notify('Pagamento realizado!');
-      } catch (err) {
-        console.error("Erro ao processar pagamento:", err);
-        notify("Erro ao processar pagamento", "error");
-        setIsFinishing(false);
+      } catch (err: any) {
+        console.error("Erro ao registrar pagamento da mesa:", err);
+        return notify('Erro ao registrar pagamento. Verifique permissões.', 'error');
       }
-    }, 800);
+
+      const finishedOrder = db.getOrderById(activeOrder.id);
+      setLastOrder(finishedOrder || null);
+      
+      setIsFinishing(false);
+      setShowPaymentModal(false);
+      setShowReceipt(true);
+      
+      // Limpeza dos estados da mesa será feita ao fechar o recibo
+      setAmountReceived('');
+      notify('Pagamento realizado com sucesso!');
+    } catch (err) {
+      console.error("Erro inesperado ao processar pagamento:", err);
+      notify("Erro inesperado. Tente novamente.", "error");
+      setIsFinishing(false);
+    }
   };
 
   const handleOpenPayment = () => {

@@ -164,12 +164,17 @@ class FirebaseDatabase {
   getCurrentSession() { return this.currentSession; }
   
   async openCashier(initialAmount: number) {
-    const sessionData = {
-      startTime: Date.now(),
-      initialAmount,
-      status: 'open'
-    };
-    await addDoc(collection(firestore, "sessions"), sessionData);
+    try {
+      const sessionData = {
+        startTime: Date.now(),
+        initialAmount,
+        status: 'open'
+      };
+      await addDoc(collection(firestore, "sessions"), sessionData);
+    } catch (error) {
+      console.error("Erro detalhado em openCashier:", error);
+      throw error;
+    }
   }
 
   async closeCashier() {
@@ -247,44 +252,49 @@ class FirebaseDatabase {
   }
 
   async createOrder(order: Omit<Order, 'id' | 'createdAt' | 'sessionId'>) {
-    const itemsWithDescription = order.items.map(item => {
-      const prod = this.products.find(p => p.id === item.productId);
-      return {
-        ...item,
-        description: prod?.description || ''
+    try {
+      const itemsWithDescription = order.items.map(item => {
+        const prod = this.products.find(p => p.id === item.productId);
+        return {
+          ...item,
+          description: prod?.description || ''
+        };
+      });
+
+      // Se não houver sessão ativa em memória, tenta buscar a mais recente aberta
+      let sessionId = this.currentSession?.id;
+      if (!sessionId) {
+        const q = query(collection(firestore, "sessions"), where("status", "==", "open"), limit(1));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          sessionId = snap.docs[0].id;
+        }
+      }
+
+      const orderData = {
+        ...order,
+        items: itemsWithDescription,
+        createdAt: Date.now(),
+        sessionId: sessionId || 'manual'
       };
-    });
 
-    // Se não houver sessão ativa em memória, tenta buscar a mais recente aberta
-    let sessionId = this.currentSession?.id;
-    if (!sessionId) {
-      const q = query(collection(firestore, "sessions"), where("status", "==", "open"), limit(1));
-      const snap = await getDocs(q);
-      if (!snap.empty) {
-        sessionId = snap.docs[0].id;
+      const docRef = await addDoc(collection(firestore, "orders"), orderData);
+      
+      if (order.tableNumber) {
+        const table = this.tables.find(t => t.number === order.tableNumber);
+        if (table) {
+          await updateDoc(doc(firestore, "tables", table.id), {
+            status: TableStatus.OCUPADA,
+            currentOrderId: docRef.id
+          });
+        }
       }
+
+      return { ...orderData, id: docRef.id } as Order;
+    } catch (error) {
+      console.error("Erro detalhado em createOrder:", error);
+      throw error;
     }
-
-    const orderData = {
-      ...order,
-      items: itemsWithDescription,
-      createdAt: Date.now(),
-      sessionId: sessionId || 'manual'
-    };
-
-    const docRef = await addDoc(collection(firestore, "orders"), orderData);
-    
-    if (order.tableNumber) {
-      const table = this.tables.find(t => t.number === order.tableNumber);
-      if (table) {
-        await updateDoc(doc(firestore, "tables", table.id), {
-          status: TableStatus.OCUPADA,
-          currentOrderId: docRef.id
-        });
-      }
-    }
-
-    return { ...orderData, id: docRef.id } as Order;
   }
 
   async updateOrderItems(orderId: string, items: OrderItem[]) {
@@ -333,22 +343,27 @@ class FirebaseDatabase {
   }
 
   async updateOrderPayment(orderId: string, paymentType: PaymentType, amountReceived: number, change: number) {
-    await updateDoc(doc(firestore, "orders", orderId), {
-      paymentType,
-      amountReceived,
-      change,
-      status: OrderStatus.PAGO
-    });
-    
-    const order = this.orders.find(o => o.id === orderId);
-    if (order?.tableNumber) {
-      const table = this.tables.find(t => t.number === order.tableNumber);
-      if (table) {
-        await updateDoc(doc(firestore, "tables", table.id), {
-          status: TableStatus.LIVRE,
-          currentOrderId: null
-        });
+    try {
+      await updateDoc(doc(firestore, "orders", orderId), {
+        paymentType,
+        amountReceived,
+        change,
+        status: OrderStatus.PAGO
+      });
+      
+      const order = this.orders.find(o => o.id === orderId);
+      if (order?.tableNumber) {
+        const table = this.tables.find(t => t.number === order.tableNumber);
+        if (table) {
+          await updateDoc(doc(firestore, "tables", table.id), {
+            status: TableStatus.LIVRE,
+            currentOrderId: null
+          });
+        }
       }
+    } catch (error) {
+      console.error("Erro detalhado em updateOrderPayment:", error);
+      throw error;
     }
   }
 

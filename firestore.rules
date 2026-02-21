@@ -9,9 +9,10 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Busca o papel do usuário na coleção 'users'
+    // Busca o papel do usuário na coleção 'users' de forma segura
     function getRole() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+      let userPath = /databases/$(database)/documents/users/$(request.auth.uid);
+      return exists(userPath) ? get(userPath).data.role : 'customer';
     }
 
     function isAdmin() {

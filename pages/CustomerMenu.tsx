@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../services/mockDatabase';
 import { Product, OrderItem, OrderStatus } from '../types';
+import ConfirmModal from '../components/ConfirmModal';
 
 interface CustomerMenuProps {
   user?: any;
@@ -17,6 +18,19 @@ const CustomerMenu: React.FC<CustomerMenuProps> = ({ user, onLogout }) => {
   const [isOrdering, setIsOrdering] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(false);
   const [lastOrderId, setLastOrderId] = useState<string | null>(null);
+  const [notification, setNotification] = useState<{message: string, type: 'success' | 'error'} | null>(null);
+  const [confirmConfig, setConfirmConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    confirmLabel?: string;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
 
   useEffect(() => {
     setProducts(db.getProducts().filter(p => p.active));
@@ -35,6 +49,11 @@ const CustomerMenu: React.FC<CustomerMenuProps> = ({ user, onLogout }) => {
       return unsub;
     }
   }, [user?.id]);
+
+  const notify = (message: string, type: 'success' | 'error' = 'success') => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification(null), 3000);
+  };
 
   const addToCart = async (product: Product) => {
     const newCart = [...cart];
@@ -92,7 +111,7 @@ const CustomerMenu: React.FC<CustomerMenuProps> = ({ user, onLogout }) => {
   };
 
   const handlePlaceOrder = async () => {
-    if (!user) return alert('Por favor, faça login para realizar o pedido.');
+    if (!user) return notify('Por favor, faça login para realizar o pedido.', 'error');
     if (cart.length === 0) return;
 
     setIsOrdering(true);
@@ -121,16 +140,22 @@ const CustomerMenu: React.FC<CustomerMenuProps> = ({ user, onLogout }) => {
 
       // Se houver whatsapp configurado, oferece a opção ou redireciona
       if (businessWhatsapp) {
-        const confirmWhatsapp = window.confirm('Pedido registrado! Deseja enviar o resumo via WhatsApp para agilizar o atendimento?');
-        if (confirmWhatsapp) {
-          window.open(`https://wa.me/${businessWhatsapp}?text=${whatsappMsg}`, '_blank');
-        }
+        setConfirmConfig({
+          isOpen: true,
+          title: 'Pedido Recebido!',
+          message: 'Deseja enviar o resumo via WhatsApp para agilizar o atendimento?',
+          confirmLabel: 'Enviar WhatsApp',
+          onConfirm: () => {
+            window.open(`https://wa.me/${businessWhatsapp}?text=${whatsappMsg}`, '_blank');
+            setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+          }
+        });
       }
 
       setTimeout(() => setOrderSuccess(false), 10000);
     } catch (error) {
       console.error("Erro ao fazer pedido:", error);
-      alert('Erro ao processar seu pedido. Tente novamente.');
+      notify('Erro ao processar seu pedido. Tente novamente.', 'error');
     } finally {
       setIsOrdering(false);
     }
@@ -153,6 +178,23 @@ const CustomerMenu: React.FC<CustomerMenuProps> = ({ user, onLogout }) => {
 
   return (
     <div className="max-w-2xl mx-auto bg-white min-h-screen pb-32 relative">
+      {notification && (
+        <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-[250] px-6 py-3 rounded-2xl shadow-2xl font-bold text-white animate-slide-in-top ${
+          notification.type === 'error' ? 'bg-red-500' : 'bg-green-600'
+        }`}>
+          {notification.type === 'error' ? '❌ ' : '✅ '} {notification.message}
+        </div>
+      )}
+
+      <ConfirmModal 
+        isOpen={confirmConfig.isOpen}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        confirmLabel={confirmConfig.confirmLabel}
+        onConfirm={confirmConfig.onConfirm}
+        onCancel={() => setConfirmConfig(prev => ({ ...prev, isOpen: false }))}
+      />
+
       <div className="bg-orange-500 p-6 text-white flex items-center justify-between shadow-lg">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center text-xl shadow-inner">🥟</div>
@@ -327,6 +369,8 @@ const CustomerMenu: React.FC<CustomerMenuProps> = ({ user, onLogout }) => {
         .animate-slide-up { animation: slide-up 0.4s cubic-bezier(0.165, 0.84, 0.44, 1) forwards; }
         @keyframes bounce-in { 0% { transform: scale(0.9); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
         .animate-bounce-in { animation: bounce-in 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        @keyframes slide-in-top { from { transform: translate(-50%, -100%); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
+        .animate-slide-in-top { animation: slide-in-top 0.3s ease-out forwards; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
       `}</style>

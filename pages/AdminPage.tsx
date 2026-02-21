@@ -6,6 +6,7 @@ import { auth, firestore } from '../services/firebase';
 import { collection, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { initializeApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
+import ConfirmModal from '../components/ConfirmModal';
 
 interface AdminPageProps {
   user: any;
@@ -53,6 +54,19 @@ const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
 
   const [notification, setNotification] = useState<{message: string, type: 'success' | 'error'} | null>(null);
   const [isCreatingUser, setIsCreatingUser] = useState(false);
+  const [confirmConfig, setConfirmConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    type: 'danger' | 'warning' | 'info';
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+    type: 'info'
+  });
 
   useEffect(() => {
     const update = () => {
@@ -161,15 +175,23 @@ const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
 
   const handleDeleteUser = async (userId: string) => {
     if (userId === user.id) return notify('Você não pode remover seu próprio acesso.', 'error');
-    if (window.confirm('Deseja remover este acesso?')) {
-      try {
-        await deleteDoc(doc(firestore, "users", userId));
-        notify('Acesso removido.');
-      } catch (err: any) {
-        console.error("Erro ao deletar usuário:", err);
-        notify('Erro ao remover: ' + err.message, 'error');
+    
+    setConfirmConfig({
+      isOpen: true,
+      title: 'Remover Acesso',
+      message: 'Deseja realmente remover este colaborador da equipe? Ele perderá o acesso imediatamente.',
+      type: 'danger',
+      onConfirm: async () => {
+        try {
+          await deleteDoc(doc(firestore, "users", userId));
+          notify('Acesso removido.');
+        } catch (err: any) {
+          console.error("Erro ao deletar usuário:", err);
+          notify('Erro ao remover: ' + err.message, 'error');
+        }
+        setConfirmConfig(prev => ({ ...prev, isOpen: false }));
       }
-    }
+    });
   };
 
   const dailyHistory = orders.reduce((acc: Record<string, { orders: Order[], total: number }>, order) => {
@@ -195,6 +217,15 @@ const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
           {notification.type === 'error' ? '❌ ' : '✅ '} {notification.message}
         </div>
       )}
+
+      <ConfirmModal 
+        isOpen={confirmConfig.isOpen}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        type={confirmConfig.type}
+        onConfirm={confirmConfig.onConfirm}
+        onCancel={() => setConfirmConfig(prev => ({ ...prev, isOpen: false }))}
+      />
 
       {/* Navegação por Abas */}
       <div className="flex bg-white p-1.5 rounded-3xl shadow-sm border border-slate-100 overflow-x-auto no-scrollbar mb-6">
@@ -293,10 +324,17 @@ const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
                 <div className="flex flex-col sm:flex-row gap-4">
                   <button 
                     onClick={() => {
-                      if (window.confirm('Deseja realmente fechar o caixa?')) {
-                        db.closeCashier();
-                        notify('Caixa fechado!');
-                      }
+                      setConfirmConfig({
+                        isOpen: true,
+                        title: 'Fechar Caixa',
+                        message: 'Deseja realmente encerrar o turno atual? Certifique-se de que todas as vendas foram processadas.',
+                        type: 'warning',
+                        onConfirm: () => {
+                          db.closeCashier();
+                          notify('Caixa fechado!');
+                          setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+                        }
+                      });
                     }}
                     className="flex-1 py-5 bg-red-500 text-white font-black rounded-2xl shadow-xl hover:bg-red-600 active:scale-95 transition-all text-lg"
                   >

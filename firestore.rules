@@ -43,8 +43,9 @@ service cloud.firestore {
 
     // Usuários: Perfis e permissões
     match /users/{userId} {
-      // Qualquer funcionário logado pode ver a lista de usuários (para admin ou identificação)
-      allow read: if isSignedIn();
+      // Qualquer funcionário logado pode ver seu próprio perfil ou um Admin pode ver todos
+      allow get: if isSignedIn();
+      allow list: if isAdmin();
       // Criação: O próprio usuário ao se registrar ou um Admin
       allow create: if isSignedIn() && (request.auth.uid == userId || isAdmin());
       // O próprio usuário pode atualizar seu perfil (endereço, whatsapp)

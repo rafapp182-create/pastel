@@ -35,12 +35,16 @@ const App: React.FC = () => {
         };
         setUser(loggedUser);
         
+        // Inicia os ouvintes do banco de dados com base no papel do usuário
+        db.start(loggedUser.role, loggedUser.id);
+        
         // Se for cliente, a aba padrão é o cardápio
         if (loggedUser.role === 'customer') {
           setActiveTab('menu');
         }
       } else {
         setUser(null);
+        db.stop();
       }
       setLoading(false);
       // Pequeno delay para UX
@@ -53,6 +57,7 @@ const App: React.FC = () => {
   const handleLogout = async () => {
     await signOut(auth);
     setUser(null);
+    db.stop();
   };
 
   const renderContent = () => {

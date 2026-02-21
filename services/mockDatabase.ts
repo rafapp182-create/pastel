@@ -48,44 +48,74 @@ class FirebaseDatabase {
   private currentSession: CashierSession | null = null;
   private listeners: Set<() => void> = new Set();
   private initialized = false;
+  private activeUnsubs: (() => void)[] = [];
 
   constructor() {
-    this.initListeners();
+    // Não inicia mais no construtor para evitar erros de permissão antes do login
   }
 
-  private async initListeners() {
-    // Escuta de Produtos
-    onSnapshot(collection(firestore, "products"), (snapshot) => {
+  public async start(role: string, userId?: string) {
+    // Limpa ouvintes anteriores se houver
+    this.stop();
+
+    console.log(`Iniciando banco de dados para papel: ${role}`);
+
+    // Produtos são públicos
+    const unsubProducts = onSnapshot(collection(firestore, "products"), (snapshot) => {
       this.products = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Product));
       if (this.products.length === 0 && !this.initialized) this.seedProducts();
       this.notify();
     });
+    this.activeUnsubs.push(unsubProducts);
 
-    // Escuta de Pedidos (limitado aos últimos 100 para performance)
-    const ordersQuery = query(collection(firestore, "orders"), orderBy("createdAt", "desc"), limit(100));
-    onSnapshot(ordersQuery, (snapshot) => {
-      this.orders = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Order));
-      this.notify();
-    });
+    // Mesas são para Staff
+    if (role === 'admin' || role === 'caixa') {
+      const unsubTables = onSnapshot(collection(firestore, "tables"), (snapshot) => {
+        this.tables = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Table)).sort((a,b) => a.number - b.number);
+        if (this.tables.length === 0 && !this.initialized) this.seedTables();
+        this.notify();
+      });
+      this.activeUnsubs.push(unsubTables);
+    }
 
-    // Escuta de Mesas
-    onSnapshot(collection(firestore, "tables"), (snapshot) => {
-      this.tables = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Table)).sort((a,b) => a.number - b.number);
-      if (this.tables.length === 0 && !this.initialized) this.seedTables();
-      this.notify();
-    });
+    // Pedidos: Staff vê todos, Cliente vê apenas os seus
+    let ordersQuery;
+    if (role === 'admin' || role === 'caixa' || role === 'cozinha') {
+      ordersQuery = query(collection(firestore, "orders"), orderBy("createdAt", "desc"), limit(100));
+    } else if (userId) {
+      ordersQuery = query(collection(firestore, "orders"), where("customerId", "==", userId), orderBy("createdAt", "desc"), limit(50));
+    }
 
-    // Escuta de Sessão de Caixa Ativa
-    const sessionsQuery = query(collection(firestore, "sessions"), where("status", "==", "open"), limit(1));
-    onSnapshot(sessionsQuery, (snapshot) => {
-      const active = snapshot.docs[0];
-      this.currentSession = active ? ({ ...active.data(), id: active.id } as CashierSession) : null;
-      this.notify();
-    }, (error) => {
-      console.error("Erro na escuta de sessões:", error);
-    });
+    if (ordersQuery) {
+      const unsubOrders = onSnapshot(ordersQuery, (snapshot) => {
+        this.orders = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Order));
+        this.notify();
+      }, (err) => {
+        console.error("Erro na escuta de pedidos:", err);
+      });
+      this.activeUnsubs.push(unsubOrders);
+    }
+
+    // Sessão de Caixa: Apenas Admin e Caixa
+    if (role === 'admin' || role === 'caixa') {
+      const sessionsQuery = query(collection(firestore, "sessions"), where("status", "==", "open"), limit(1));
+      const unsubSessions = onSnapshot(sessionsQuery, (snapshot) => {
+        const active = snapshot.docs[0];
+        this.currentSession = active ? ({ ...active.data(), id: active.id } as CashierSession) : null;
+        this.notify();
+      }, (error) => {
+        console.error("Erro na escuta de sessões:", error);
+      });
+      this.activeUnsubs.push(unsubSessions);
+    }
 
     this.initialized = true;
+  }
+
+  public stop() {
+    this.activeUnsubs.forEach(unsub => unsub());
+    this.activeUnsubs = [];
+    this.initialized = false;
   }
 
   private async seedProducts() {

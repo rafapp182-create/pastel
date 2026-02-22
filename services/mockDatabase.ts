@@ -10,7 +10,9 @@ import {
   orderBy, 
   getDocs,
   limit,
-  where
+  where,
+  deleteDoc,
+  writeBatch
 } from "firebase/firestore";
 import { firestore } from "./firebase";
 import { 
@@ -33,6 +35,8 @@ const initialProducts: Product[] = [
   { id: '6', name: 'Pastel de Bacalhau', description: 'Bacalhau do porto desfiado com azeitonas', category: 'Pasteis Especiais', price: 22.00, imageUrl: 'https://picsum.photos/seed/p13/300/200', active: true },
   { id: '7', name: 'Caldo de Cana 500ml', description: 'Moído na hora, bem geladinho', category: 'Bebidas', price: 8.00, imageUrl: 'https://picsum.photos/seed/p5/300/200', active: true },
   { id: '8', name: 'Coca-Cola Lata', description: '350ml gelada', category: 'Bebidas', price: 6.50, imageUrl: 'https://picsum.photos/seed/p6/300/200', active: true },
+  { id: '9', name: 'Pastel de Camarão', description: 'Camarões selecionados com molho especial', category: 'Pasteis Especiais', price: 25.00, imageUrl: 'https://picsum.photos/seed/p14/300/200', active: true },
+  { id: '10', name: 'Encomenda Cento Mini', description: 'Cento de mini pastéis variados para festas', category: 'Encomendas', price: 120.00, imageUrl: 'https://picsum.photos/seed/p15/300/200', active: true },
 ];
 
 const initialTables: Table[] = Array.from({ length: 12 }, (_, i) => ({
@@ -385,6 +389,44 @@ class FirebaseDatabase {
       return null;
     } catch (error) {
       console.error("Erro detalhado em updateOrderPayment:", error);
+      throw error;
+    }
+  }
+
+  async clearOrderHistory() {
+    try {
+      // 1. Limpar Pedidos
+      const qOrders = query(collection(firestore, "orders"));
+      const snapOrders = await getDocs(qOrders);
+      const batchOrders = writeBatch(firestore);
+      snapOrders.docs.forEach(d => {
+        batchOrders.delete(d.ref);
+      });
+      await batchOrders.commit();
+
+      // 2. Limpar Sessões
+      const qSessions = query(collection(firestore, "sessions"));
+      const snapSessions = await getDocs(qSessions);
+      const batchSessions = writeBatch(firestore);
+      snapSessions.docs.forEach(d => {
+        batchSessions.delete(d.ref);
+      });
+      await batchSessions.commit();
+
+      // 3. Resetar Mesas
+      const batchTables = writeBatch(firestore);
+      this.tables.forEach(t => {
+        batchTables.update(doc(firestore, "tables", t.id), {
+          status: TableStatus.LIVRE,
+          currentOrderId: null
+        });
+      });
+      await batchTables.commit();
+
+      this.currentSession = null;
+      return true;
+    } catch (error) {
+      console.error("Erro detalhado em clearOrderHistory:", error);
       throw error;
     }
   }

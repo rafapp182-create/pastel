@@ -140,6 +140,24 @@ const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
     notify('Configurações atualizadas!');
   };
 
+  const handleClearHistory = () => {
+    setConfirmConfig({
+      isOpen: true,
+      title: 'Limpar Todo Histórico',
+      message: 'Esta ação irá apagar permanentemente todos os pedidos e vendas registrados. Deseja continuar?',
+      type: 'danger',
+      onConfirm: async () => {
+        try {
+          await db.clearOrderHistory();
+          notify('Histórico limpo com sucesso!');
+        } catch (err: any) {
+          notify('Erro ao limpar histórico: ' + err.message, 'error');
+        }
+        setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+      }
+    });
+  };
+
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newUser.email || !newUser.password || !newUser.name) return notify('Preencha todos os campos.', 'error');
@@ -447,6 +465,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
                   <option>Pasteis de Frango</option>
                   <option>Pasteis Especiais</option>
                   <option>Bebidas</option>
+                  <option>Encomendas</option>
                 </select>
               </div>
               <div className="md:col-span-2 space-y-2">
@@ -531,10 +550,25 @@ const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
       {/* ABA: HISTÓRICO */}
       {activeSubTab === 'history' && (
         <div className="space-y-6 animate-fade-in">
-          <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
-            <span>📜</span> Vendas por Período
-          </h2>
-          {sortedDates.map(date => (
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
+              <span>📜</span> Vendas por Período
+            </h2>
+            {orders.length > 0 && (
+              <button 
+                onClick={handleClearHistory}
+                className="text-[10px] font-black uppercase tracking-widest text-red-500 hover:bg-red-50 px-4 py-2 rounded-xl transition-all border border-red-100"
+              >
+                🗑️ Limpar Tudo
+              </button>
+            )}
+          </div>
+          {sortedDates.length === 0 ? (
+            <div className="bg-white p-12 rounded-[2.5rem] shadow-sm border border-slate-100 text-center space-y-4">
+               <div className="text-4xl">📭</div>
+               <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">Nenhum pedido registrado ainda.</p>
+            </div>
+          ) : sortedDates.map(date => (
             <div key={date} className="bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden">
               <button 
                 onClick={() => setExpandedDate(expandedDate === date ? null : date)}
@@ -657,6 +691,37 @@ const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
                 Salvar Configurações
               </button>
             </form>
+          </div>
+
+          <div className="bg-white p-8 rounded-[2.5rem] shadow-lg border border-slate-100">
+            <div className="flex items-center justify-between mb-8">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">📱</span>
+                <h2 className="text-xl font-black text-slate-800">QR Code do Cardápio</h2>
+              </div>
+              <button 
+                onClick={() => window.print()} 
+                className="bg-slate-900 text-white px-6 py-2 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-800 transition-all flex items-center gap-2"
+              >
+                <span>🖨️</span> Imprimir QR Code
+              </button>
+            </div>
+            
+            <div className="flex flex-col items-center justify-center space-y-6 py-10 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200 print:bg-white print:border-none print:p-0">
+              <div className="bg-white p-6 rounded-[2rem] shadow-xl border border-slate-100 print:shadow-none print:border-none">
+                <img 
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${window.location.origin}/menu`} 
+                  alt="QR Code do Cardápio" 
+                  className="w-48 h-48 sm:w-64 sm:h-64"
+                  referrerPolicy="no-referrer"
+                />
+              </div>
+              <div className="text-center space-y-2">
+                <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight">Hoje Pode Pastelaria</h3>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Aponte a câmera para acessar o cardápio</p>
+                <p className="text-[10px] text-orange-500 font-black">{window.location.origin}/menu</p>
+              </div>
+            </div>
           </div>
         </div>
       )}

@@ -287,16 +287,6 @@ const CustomerMenu: React.FC<CustomerMenuProps> = ({ user, onLogout }) => {
             ))}
           </div>
 
-          <div className="py-8 text-center space-y-4">
-              <div className="inline-block p-3 bg-slate-50 rounded-2xl border border-slate-200">
-                  <img 
-                    src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=https://hojepodepastelaria.com/menu" 
-                    alt="QR Code" 
-                    referrerPolicy="no-referrer"
-                  />
-              </div>
-              <p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest">Aponte a câmera para pedir de novo</p>
-          </div>
         </div>
       </div>
 

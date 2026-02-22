@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { db } from '../services/mockDatabase';
-import { Product, Order, CashierSession, PaymentType, UserRole } from '../types';
+import { Product, Order, CashierSession, PaymentType, UserRole, Category } from '../types';
 import { auth, firestore } from '../services/firebase';
 import { collection, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { initializeApp } from 'firebase/app';
@@ -15,12 +15,15 @@ interface AdminPageProps {
 
 const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
   const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [session, setSession] = useState<CashierSession | null>(null);
   const [users, setUsers] = useState<any[]>([]);
-  const [activeSubTab, setActiveSubTab] = useState<'stats' | 'inventory' | 'history' | 'users' | 'settings' | 'cashier'>('stats');
+  const [activeSubTab, setActiveSubTab] = useState<'stats' | 'inventory' | 'history' | 'users' | 'settings' | 'cashier' | 'categories'>('stats');
   const [expandedDate, setExpandedDate] = useState<string | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [bannerUrl, setBannerUrl] = useState('');
   const [businessWhatsapp, setBusinessWhatsapp] = useState('');
   const [openingValue, setOpeningValue] = useState('');
@@ -32,6 +35,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
     { id: 'stats', label: 'Resumo', icon: '📊', adminOnly: false },
     { id: 'cashier', label: 'Caixa', icon: '💰', adminOnly: false },
     { id: 'inventory', label: 'Produtos', icon: '🥟', adminOnly: false },
+    { id: 'categories', label: 'Categorias', icon: '🏷️', adminOnly: false },
     { id: 'history', label: 'Histórico', icon: '📜', adminOnly: false },
     { id: 'users', label: 'Equipe', icon: '👥', adminOnly: true },
     { id: 'settings', label: 'Ajustes', icon: '⚙️', adminOnly: true }
@@ -40,10 +44,16 @@ const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
   const [newProduct, setNewProduct] = useState({
       name: '',
       description: '',
-      category: 'Pasteis de Carne',
+      category: '',
       price: '',
       imageUrl: ''
   });
+
+  useEffect(() => {
+    if (categories.length > 0 && !newProduct.category) {
+      setNewProduct(prev => ({ ...prev, category: categories[0].name }));
+    }
+  }, [categories]);
 
   const [newUser, setNewUser] = useState({
     name: '',
@@ -70,9 +80,17 @@ const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
 
   useEffect(() => {
     const update = () => {
-      setProducts(db.getProducts());
-      setOrders(db.getOrders());
-      setSession(db.getCurrentSession());
+      const prods = db.getProducts();
+      const cats = db.getCategories();
+      const ords = db.getOrders();
+      const sess = db.getCurrentSession();
+      
+      console.log('AdminPage Update:', { prods: prods.length, cats: cats.length, ords: ords.length });
+      
+      setProducts(prods);
+      setCategories(cats);
+      setOrders(ords);
+      setSession(sess);
     };
     update();
     const unsub = db.subscribe(update);
@@ -118,7 +136,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
         notify('Produto cadastrado com sucesso!');
       }
 
-      setNewProduct({ name: '', description: '', category: 'Pasteis de Carne', price: '', imageUrl: '' });
+      setNewProduct({ name: '', description: '', category: categories[0]?.name || 'Pasteis de Carne', price: '', imageUrl: '' });
   };
 
   const handleEditProduct = (p: Product) => {
@@ -152,6 +170,44 @@ const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
           notify('Histórico limpo com sucesso!');
         } catch (err: any) {
           notify('Erro ao limpar histórico: ' + err.message, 'error');
+        }
+        setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+      }
+    });
+  };
+
+  const handleAddCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    console.log('handleAddCategory called with:', newCategoryName);
+    if (!newCategoryName.trim()) return notify('Digite o nome da categoria.', 'error');
+    
+    setIsAddingCategory(true);
+    try {
+      console.log('Calling db.addCategory...');
+      await db.addCategory(newCategoryName.trim());
+      console.log('db.addCategory success!');
+      setNewCategoryName('');
+      notify('Categoria adicionada!');
+    } catch (err: any) {
+      console.error("Erro ao adicionar categoria:", err);
+      notify('Erro ao adicionar categoria: ' + (err.message || 'Verifique a conexão.'), 'error');
+    } finally {
+      setIsAddingCategory(false);
+    }
+  };
+
+  const handleDeleteCategory = async (id: string) => {
+    setConfirmConfig({
+      isOpen: true,
+      title: 'Excluir Categoria',
+      message: 'Deseja realmente excluir esta categoria? Os produtos nela continuarão existindo mas sem categoria vinculada.',
+      type: 'danger',
+      onConfirm: async () => {
+        try {
+          await db.deleteCategory(id);
+          notify('Categoria excluída.');
+        } catch (err: any) {
+          notify('Erro ao excluir: ' + err.message, 'error');
         }
         setConfirmConfig(prev => ({ ...prev, isOpen: false }));
       }
@@ -461,11 +517,9 @@ const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
                   value={newProduct.category} 
                   onChange={e => setNewProduct({...newProduct, category: e.target.value})}
                 >
-                  <option>Pasteis de Carne</option>
-                  <option>Pasteis de Frango</option>
-                  <option>Pasteis Especiais</option>
-                  <option>Bebidas</option>
-                  <option>Encomendas</option>
+                  {categories.map(cat => (
+                    <option key={cat.id} value={cat.name}>{cat.name}</option>
+                  ))}
                 </select>
               </div>
               <div className="md:col-span-2 space-y-2">
@@ -543,6 +597,56 @@ const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
                 </tbody>
               </table>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ABA: CATEGORIAS */}
+      {activeSubTab === 'categories' && (
+        <div className="space-y-8 animate-fade-in">
+          <div className="bg-white p-8 rounded-[2.5rem] shadow-lg border border-slate-100">
+            <h2 className="text-xl font-black text-slate-800 mb-6 flex items-center gap-2">
+              <span>🏷️</span> Nova Categoria
+            </h2>
+            <form onSubmit={handleAddCategory} className="flex gap-4">
+              <input 
+                className="flex-1 bg-slate-100 text-slate-900 border-none rounded-2xl p-4 font-bold outline-none focus:ring-2 focus:ring-orange-500" 
+                placeholder="Nome da Categoria (Ex: Sobremesas)" 
+                value={newCategoryName} 
+                onChange={e => setNewCategoryName(e.target.value)} 
+                disabled={isAddingCategory}
+              />
+              <button 
+                type="submit"
+                disabled={isAddingCategory}
+                className={`bg-orange-500 text-white px-8 rounded-2xl font-black transition-all active:scale-95 shadow-lg ${isAddingCategory ? 'opacity-50 cursor-not-allowed' : 'hover:bg-orange-600'}`}
+              >
+                {isAddingCategory ? '...' : 'Adicionar'}
+              </button>
+            </form>
+          </div>
+
+          <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
+            <table className="w-full text-left">
+              <thead className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-widest">
+                <tr>
+                  <th className="px-8 py-4">Ordem</th>
+                  <th className="px-8 py-4">Nome</th>
+                  <th className="px-8 py-4 text-center">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {categories.map((cat, index) => (
+                  <tr key={cat.id} className="border-b border-slate-50">
+                    <td className="px-8 py-4 font-black text-slate-300">#{index + 1}</td>
+                    <td className="px-8 py-4 font-bold text-slate-900">{cat.name}</td>
+                    <td className="px-8 py-4 text-center">
+                      <button onClick={() => handleDeleteCategory(cat.id)} className="text-red-400 hover:text-red-600 p-2">🗑️</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}

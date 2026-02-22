@@ -6,6 +6,7 @@ import { Product, OrderItem, PaymentType, OrderStatus, CashierSession, Order, Ta
 const POSPage: React.FC = () => {
   const [session, setSession] = useState<CashierSession | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
+  const [categoriesList, setCategoriesList] = useState<string[]>([]);
   const [cart, setCart] = useState<OrderItem[]>([]);
   const [paymentType, setPaymentType] = useState<PaymentType>(PaymentType.CARTAO);
   const [amountReceived, setAmountReceived] = useState<string>('');
@@ -32,6 +33,7 @@ const POSPage: React.FC = () => {
   useEffect(() => {
     const updateState = () => {
       setProducts(db.getProducts());
+      setCategoriesList(['Todos', ...db.getCategories().map(c => c.name)]);
       setSession(db.getCurrentSession());
       setTables(db.getTables());
       
@@ -291,7 +293,7 @@ const POSPage: React.FC = () => {
     );
   }
 
-  const categories = ['Todos', ...Array.from(new Set(products.map(p => p.category)))];
+  const categories = categoriesList;
   const filteredProducts = activeCategory === 'Todos' 
     ? products 
     : products.filter(p => p.category === activeCategory);

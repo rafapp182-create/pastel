@@ -23,8 +23,17 @@ import {
   TableStatus, 
   CashierSession, 
   OrderItem, 
-  PaymentType 
+  PaymentType,
+  Category
 } from '../types';
+
+const initialCategories = [
+  { name: 'Pasteis de Carne', order: 1 },
+  { name: 'Pasteis de Frango', order: 2 },
+  { name: 'Pasteis Especiais', order: 3 },
+  { name: 'Bebidas', order: 4 },
+  { name: 'Encomendas', order: 5 },
+];
 
 const initialProducts: Product[] = [
   { id: '1', name: 'Pastel de Carne', description: 'Carne moída temperada, ovo e azeitona', category: 'Pasteis de Carne', price: 12.50, imageUrl: 'https://picsum.photos/seed/p1/300/200', active: true },
@@ -49,12 +58,14 @@ class FirebaseDatabase {
   private products: Product[] = [];
   private orders: Order[] = [];
   private tables: Table[] = [];
+  private categories: Category[] = [];
   private currentSession: CashierSession | null = null;
   private listeners: Set<() => void> = new Set();
   private initialized = false;
   private activeUnsubs: (() => void)[] = [];
   private isSeedingProducts = false;
   private isSeedingTables = false;
+  private isSeedingCategories = false;
 
   constructor() {
     // Não inicia mais no construtor para evitar erros de permissão antes do login
@@ -75,6 +86,19 @@ class FirebaseDatabase {
     this.stop();
 
     console.log(`Iniciando banco de dados para papel: ${role}`);
+
+    // Categorias são públicas
+    const unsubCategories = onSnapshot(query(collection(firestore, "categories"), orderBy("order", "asc")), (snapshot) => {
+      this.categories = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Category));
+      console.log(`Categorias carregadas: ${this.categories.length}`);
+      if (this.categories.length === 0 && !this.isSeedingCategories) {
+        this.seedCategories();
+      }
+      this.notify();
+    }, (err) => {
+      console.error("Erro na escuta de categorias:", err);
+    });
+    this.activeUnsubs.push(unsubCategories);
 
     // Produtos são públicos
     const unsubProducts = onSnapshot(collection(firestore, "products"), (snapshot) => {
@@ -163,6 +187,25 @@ class FirebaseDatabase {
       }
     } finally {
       this.isSeedingTables = false;
+    }
+  }
+
+  private async seedCategories() {
+    if (this.isSeedingCategories) return;
+    this.isSeedingCategories = true;
+    try {
+      console.log("Semeando categorias iniciais...");
+      const batch = writeBatch(firestore);
+      initialCategories.forEach(cat => {
+        const docRef = doc(collection(firestore, "categories"));
+        batch.set(docRef, cat);
+      });
+      await batch.commit();
+      console.log("Categorias semeadas com sucesso.");
+    } catch (err) {
+      console.error("Erro ao semear categorias:", err);
+    } finally {
+      this.isSeedingCategories = false;
     }
   }
 
@@ -429,6 +472,32 @@ class FirebaseDatabase {
       console.error("Erro detalhado em clearOrderHistory:", error);
       throw error;
     }
+  }
+
+  getCategories() { return this.categories; }
+
+  async addCategory(name: string) {
+    try {
+      console.log('db.addCategory current categories:', this.categories);
+      const order = this.categories.length > 0 
+        ? Math.max(...this.categories.map(c => c.order)) + 1 
+        : 1;
+      console.log(`Adicionando categoria: ${name} com ordem ${order}`);
+      const docRef = await addDoc(collection(firestore, "categories"), { name, order });
+      console.log(`Categoria adicionada com ID: ${docRef.id}`);
+      return docRef.id;
+    } catch (error) {
+      console.error("Erro ao adicionar categoria no Firebase:", error);
+      throw error;
+    }
+  }
+
+  async deleteCategory(id: string) {
+    await deleteDoc(doc(firestore, "categories", id));
+  }
+
+  async updateCategoryOrder(id: string, order: number) {
+    await updateDoc(doc(firestore, "categories", id), { order });
   }
 
   getTables() { return this.tables; }

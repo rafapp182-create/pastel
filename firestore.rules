@@ -93,6 +93,12 @@ service cloud.firestore {
       allow write: if isAdmin() || isCaixa();
     }
 
+    // Categorias: Organização do cardápio
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow write: if isAdmin() || isCaixa();
+    }
+
     // Carrinhos: Persistência de itens por usuário
     match /carts/{userId} {
       // O próprio usuário pode ler e escrever seu carrinho, Admin também pode ver

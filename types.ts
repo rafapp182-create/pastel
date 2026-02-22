@@ -35,6 +35,12 @@ export interface Product {
   active: boolean;
 }
 
+export interface Category {
+  id: string;
+  name: string;
+  order: number;
+}
+
 export interface OrderItem {
   productId: string;
   name: string;

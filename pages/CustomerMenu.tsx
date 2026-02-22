@@ -11,6 +11,7 @@ interface CustomerMenuProps {
 
 const CustomerMenu: React.FC<CustomerMenuProps> = ({ user, onLogout }) => {
   const [products, setProducts] = useState<Product[]>([]);
+  const [categoriesList, setCategoriesList] = useState<string[]>([]);
   const [bannerUrl, setBannerUrl] = useState('https://picsum.photos/seed/pastel-hero/800/400');
   const [businessWhatsapp, setBusinessWhatsapp] = useState('');
   const [cart, setCart] = useState<OrderItem[]>([]);
@@ -33,11 +34,19 @@ const CustomerMenu: React.FC<CustomerMenuProps> = ({ user, onLogout }) => {
   });
 
   useEffect(() => {
-    setProducts(db.getProducts().filter(p => p.active));
+    const update = () => {
+      setProducts(db.getProducts().filter(p => p.active));
+      setCategoriesList(db.getCategories().map(c => c.name));
+    };
+    update();
+    const unsub = db.subscribe(update);
+
     db.getSettings().then(s => {
       setBannerUrl(s.bannerUrl || 'https://picsum.photos/seed/pastel-hero/800/400');
       setBusinessWhatsapp(s.businessWhatsapp || '');
     });
+
+    return unsub;
   }, []);
 
   // Sync cart with Firestore
@@ -161,7 +170,7 @@ const CustomerMenu: React.FC<CustomerMenuProps> = ({ user, onLogout }) => {
     }
   };
 
-  const categories = Array.from(new Set(products.map(p => p.category)));
+  const categories = categoriesList.filter(cat => products.some(p => p.category === cat));
 
   const scrollToCategory = (cat: string) => {
     const element = document.getElementById(`category-${cat}`);

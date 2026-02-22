@@ -92,7 +92,7 @@ const App: React.FC = () => {
 
     switch (activeTab) {
       case 'pos': return <POSPage />;
-      case 'tables': return <TableManager />;
+      case 'tables': return <TableManager setActiveTab={setActiveTab} />;
       case 'kitchen': return <KitchenPage />;
       case 'menu': return <CustomerMenu user={user} onLogout={handleLogout} />;
       case 'admin': return <AdminPage user={user} setActiveTab={setActiveTab} />;

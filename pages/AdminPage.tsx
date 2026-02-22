@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { db } from '../services/mockDatabase';
-import { Product, Order, CashierSession, PaymentType, UserRole, Category } from '../types';
+import { Product, Order, CashierSession, PaymentType, UserRole, Category, BusinessSettings } from '../types';
 import { auth, firestore } from '../services/firebase';
 import { collection, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { initializeApp } from 'firebase/app';
@@ -28,6 +28,8 @@ const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
   const [businessWhatsapp, setBusinessWhatsapp] = useState('');
   const [openingValue, setOpeningValue] = useState('');
   const [isOpening, setIsOpening] = useState(false);
+  const [businessSettings, setBusinessSettings] = useState<BusinessSettings>(db.getSettings());
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
 
   const isAdmin = user?.role === 'admin';
 
@@ -84,6 +86,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
       const cats = db.getCategories();
       const ords = db.getOrders();
       const sess = db.getCurrentSession();
+      const sets = db.getSettings();
       
       console.log('AdminPage Update:', { prods: prods.length, cats: cats.length, ords: ords.length });
       
@@ -91,17 +94,15 @@ const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
       setCategories(cats);
       setOrders(ords);
       setSession(sess);
+      setBusinessSettings(sets);
+      setBannerUrl(sets.bannerUrl || '');
+      setBusinessWhatsapp(sets.businessWhatsapp || '');
     };
     update();
     const unsub = db.subscribe(update);
 
     const unsubUsers = onSnapshot(collection(firestore, "users"), (snapshot) => {
       setUsers(snapshot.docs.map(d => ({ ...d.data(), id: d.id })));
-    });
-
-    db.getSettings().then(s => {
-      setBannerUrl(s.bannerUrl || '');
-      setBusinessWhatsapp(s.businessWhatsapp || '');
     });
 
     return () => {
@@ -174,6 +175,19 @@ const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
         setConfirmConfig(prev => ({ ...prev, isOpen: false }));
       }
     });
+  };
+
+  const handleSaveSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingSettings(true);
+    try {
+      await db.updateSettings(businessSettings);
+      notify('Configurações salvas com sucesso!');
+    } catch (err: any) {
+      notify('Erro ao salvar: ' + err.message, 'error');
+    } finally {
+      setIsSavingSettings(false);
+    }
   };
 
   const handleAddCategory = async (e: React.FormEvent) => {
@@ -332,6 +346,37 @@ const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
           <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
             <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Itens Ativos</p>
             <h3 className="text-3xl font-black text-slate-900">{products.length}</h3>
+          </div>
+
+          <div className="md:col-span-3 bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
+            <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-6">Vendas por Categoria</h3>
+            <div className="space-y-4">
+              {categories.map(cat => {
+                const catSales = orders.reduce((acc, order) => {
+                  const itemsInCat = order.items.filter(item => {
+                    const prod = products.find(p => p.id === item.productId);
+                    return prod?.category === cat.name;
+                  });
+                  return acc + itemsInCat.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+                }, 0);
+                const percentage = orders.length > 0 ? (catSales / orders.reduce((a, b) => a + b.total, 0)) * 100 : 0;
+                
+                return (
+                  <div key={cat.id} className="space-y-2">
+                    <div className="flex justify-between text-xs font-black uppercase tracking-widest">
+                      <span className="text-slate-600">{cat.name}</span>
+                      <span className="text-orange-600">R$ {catSales.toFixed(2)}</span>
+                    </div>
+                    <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-orange-500 transition-all duration-1000" 
+                        style={{ width: `${Math.min(100, isNaN(percentage) ? 0 : percentage)}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}
@@ -758,42 +803,87 @@ const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
 
       {/* ABA: CONFIGURAÇÕES */}
       {activeSubTab === 'settings' && (
-        <div className="space-y-8 animate-fade-in">
+        <div className="space-y-6 animate-fade-in">
           <div className="bg-white p-8 rounded-[2.5rem] shadow-lg border border-slate-100">
-            <div className="flex items-center gap-3 mb-6">
+            <div className="flex items-center gap-3 mb-8">
               <span className="text-2xl">⚙️</span>
-              <h2 className="text-xl font-black text-slate-800">Configurações do Cardápio</h2>
+              <h2 className="text-xl font-black text-slate-800">Configurações do Negócio</h2>
             </div>
-            <form onSubmit={handleUpdateSettings} className="space-y-6">
-              <div className="space-y-2">
-                <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">URL do Banner Principal</label>
-                <div className="flex gap-4">
+            
+            <form onSubmit={handleSaveSettings} className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Nome da Pastelaria</label>
                   <input 
-                    className="flex-1 bg-slate-100 text-slate-900 rounded-2xl p-4 outline-none focus:ring-2 focus:ring-orange-500 font-bold border-none" 
-                    value={bannerUrl} 
-                    onChange={e => setBannerUrl(e.target.value)} 
-                    placeholder="https://suaimagem.com/banner.jpg" 
+                    className="w-full bg-slate-100 text-slate-900 rounded-2xl p-4 outline-none focus:ring-2 focus:ring-orange-500 font-bold border-none" 
+                    value={businessSettings.name} 
+                    onChange={e => setBusinessSettings({...businessSettings, name: e.target.value})} 
+                    placeholder="Ex: Hoje Pode Pastelaria" 
                   />
-                  {bannerUrl && (
-                    <div className="w-24 h-14 rounded-xl overflow-hidden border border-slate-200 shadow-sm">
-                      <img src={bannerUrl} className="w-full h-full object-cover" alt="Banner Preview" referrerPolicy="no-referrer" />
-                    </div>
-                  )}
                 </div>
-                <p className="text-[10px] text-slate-400 font-medium px-2 italic">Esta imagem aparecerá no topo do cardápio digital dos clientes.</p>
+                <div className="space-y-2">
+                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">WhatsApp (DDI + DDD + Número)</label>
+                  <input 
+                    className="w-full bg-slate-100 text-slate-900 rounded-2xl p-4 outline-none focus:ring-2 focus:ring-orange-500 font-bold border-none" 
+                    value={businessSettings.whatsapp} 
+                    onChange={e => setBusinessSettings({...businessSettings, whatsapp: e.target.value})} 
+                    placeholder="Ex: 5511999999999" 
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Taxa de Entrega (R$)</label>
+                  <input 
+                    type="number"
+                    step="0.01"
+                    className="w-full bg-slate-100 text-slate-900 rounded-2xl p-4 outline-none focus:ring-2 focus:ring-orange-500 font-bold border-none" 
+                    value={businessSettings.deliveryFee} 
+                    onChange={e => setBusinessSettings({...businessSettings, deliveryFee: parseFloat(e.target.value) || 0})} 
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Pedido Mínimo (R$)</label>
+                  <input 
+                    type="number"
+                    step="0.01"
+                    className="w-full bg-slate-100 text-slate-900 rounded-2xl p-4 outline-none focus:ring-2 focus:ring-orange-500 font-bold border-none" 
+                    value={businessSettings.minOrderValue} 
+                    onChange={e => setBusinessSettings({...businessSettings, minOrderValue: parseFloat(e.target.value) || 0})} 
+                  />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Endereço Completo</label>
+                  <input 
+                    className="w-full bg-slate-100 text-slate-900 rounded-2xl p-4 outline-none focus:ring-2 focus:ring-orange-500 font-bold border-none" 
+                    value={businessSettings.address} 
+                    onChange={e => setBusinessSettings({...businessSettings, address: e.target.value})} 
+                    placeholder="Rua, Número, Bairro, Cidade" 
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Horário de Funcionamento</label>
+                  <input 
+                    className="w-full bg-slate-100 text-slate-900 rounded-2xl p-4 outline-none focus:ring-2 focus:ring-orange-500 font-bold border-none" 
+                    value={businessSettings.openingHours} 
+                    onChange={e => setBusinessSettings({...businessSettings, openingHours: e.target.value})} 
+                    placeholder="Ex: 18:00 - 23:30" 
+                  />
+                </div>
+                <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                  <span className="text-sm font-bold text-slate-600">Loja Aberta?</span>
+                  <button 
+                    type="button"
+                    onClick={() => setBusinessSettings({...businessSettings, isOpen: !businessSettings.isOpen})}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${businessSettings.isOpen ? 'bg-green-500' : 'bg-slate-300'}`}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${businessSettings.isOpen ? 'translate-x-6' : 'translate-x-1'}`} />
+                  </button>
+                </div>
               </div>
-              <div className="space-y-2">
-                <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">WhatsApp do Estabelecimento</label>
-                <input 
-                  className="w-full bg-slate-100 text-slate-900 rounded-2xl p-4 outline-none focus:ring-2 focus:ring-orange-500 font-bold border-none" 
-                  value={businessWhatsapp} 
-                  onChange={e => setBusinessWhatsapp(e.target.value)} 
-                  placeholder="Ex: 5511999999999" 
-                />
-                <p className="text-[10px] text-slate-400 font-medium px-2 italic">Número para onde os pedidos serão enviados via WhatsApp (inclua o DDI 55).</p>
-              </div>
-              <button className="w-full bg-orange-500 text-white font-black py-5 rounded-2xl hover:bg-orange-600 transition-all shadow-xl active:scale-95 text-lg">
-                Salvar Configurações
+              <button 
+                disabled={isSavingSettings}
+                className={`w-full font-black py-5 rounded-2xl transition-all shadow-xl active:scale-95 text-lg ${isSavingSettings ? 'bg-slate-200 text-slate-400' : 'bg-orange-500 text-white hover:bg-orange-600'}`}
+              >
+                {isSavingSettings ? 'Salvando...' : 'Salvar Configurações'}
               </button>
             </form>
           </div>

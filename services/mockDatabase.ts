@@ -60,6 +60,7 @@ class FirebaseDatabase {
   private tables: Table[] = [];
   private categories: Category[] = [];
   private currentSession: CashierSession | null = null;
+  private settings: BusinessSettings | null = null;
   private listeners: Set<() => void> = new Set();
   private initialized = false;
   private activeUnsubs: (() => void)[] = [];
@@ -152,6 +153,15 @@ class FirebaseDatabase {
       });
       this.activeUnsubs.push(unsubSessions);
     }
+
+    // Configurações: Públicas
+    const unsubSettings = onSnapshot(doc(firestore, "settings", "business"), (snapshot) => {
+      if (snapshot.exists()) {
+        this.settings = snapshot.data() as BusinessSettings;
+      }
+      this.notify();
+    });
+    this.activeUnsubs.push(unsubSettings);
 
     this.initialized = true;
   }
@@ -310,6 +320,11 @@ class FirebaseDatabase {
 
   async createOrder(order: Omit<Order, 'id' | 'createdAt' | 'sessionId'>) {
     try {
+      // Se for pedido de mesa/comanda, exige caixa aberto
+      if (order.tableNumber && !this.currentSession) {
+        throw new Error("O caixa deve estar aberto para realizar vendas via comanda ou mesa.");
+      }
+
       const itemsWithDescription = order.items.map(item => {
         const prod = this.products.find(p => p.id === item.productId);
         return {
@@ -336,7 +351,8 @@ class FirebaseDatabase {
         ...order,
         items: itemsWithDescription,
         createdAt: Date.now(),
-        sessionId: sessionId || 'manual'
+        sessionId: sessionId || 'manual',
+        type: order.type || (order.tableNumber ? 'table' : 'counter')
       });
 
       const docRef = await addDoc(collection(firestore, "orders"), orderData);
@@ -500,7 +516,31 @@ class FirebaseDatabase {
     await updateDoc(doc(firestore, "categories", id), { order });
   }
 
+  async updateOrderStatus(orderId: string, status: OrderStatus) {
+    const updateData: any = { status };
+    if (status === OrderStatus.ENTREGUE || status === OrderStatus.PAGO) {
+      updateData.deliveredAt = Date.now();
+    }
+    await updateDoc(doc(firestore, "orders", orderId), updateData);
+  }
+
   getTables() { return this.tables; }
+  
+  getSettings(): BusinessSettings {
+    return this.settings || {
+      name: 'Hoje Pode Pastelaria',
+      whatsapp: '',
+      address: '',
+      deliveryFee: 0,
+      minOrderValue: 0,
+      isOpen: true,
+      openingHours: '08:00 - 22:00'
+    };
+  }
+
+  async updateSettings(settings: BusinessSettings) {
+    await setDoc(doc(firestore, "settings", "business"), settings);
+  }
   
   getTableByNumber(num: number) {
     return this.tables.find(t => t.number === num);

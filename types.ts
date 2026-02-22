@@ -3,7 +3,10 @@ export enum OrderStatus {
   NOVO = 'novo',
   PREPARO = 'preparo',
   FINALIZADO = 'finalizado',
-  PAGO = 'pago'
+  SAIU_ENTREGA = 'saiu_entrega',
+  ENTREGUE = 'entregue',
+  PAGO = 'pago',
+  CANCELADO = 'cancelado'
 }
 
 export enum PaymentType {
@@ -53,6 +56,8 @@ export interface Order {
   id: string;
   items: OrderItem[];
   total: number;
+  deliveryFee?: number;
+  discount?: number;
   paymentType?: PaymentType;
   amountReceived?: number;
   change?: number;
@@ -63,8 +68,19 @@ export interface Order {
   customerWhatsapp?: string;
   customerId?: string;
   createdAt: number;
-  deliveredAt?: number; // Novo campo para rastrear entrega
+  deliveredAt?: number;
   sessionId?: string;
+  type: 'delivery' | 'table' | 'counter';
+}
+
+export interface BusinessSettings {
+  name: string;
+  whatsapp: string;
+  address: string;
+  deliveryFee: number;
+  minOrderValue: number;
+  isOpen: boolean;
+  openingHours: string;
 }
 
 export interface Table {

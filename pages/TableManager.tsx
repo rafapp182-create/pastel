@@ -3,10 +3,15 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../services/mockDatabase';
 import { Table, TableStatus, Product, Order, OrderItem, OrderStatus, PaymentType } from '../types';
 
-const TableManager: React.FC = () => {
+interface TableManagerProps {
+  setActiveTab?: (tab: string) => void;
+}
+
+const TableManager: React.FC<TableManagerProps> = ({ setActiveTab }) => {
   const [tables, setTables] = useState<Table[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [session, setSession] = useState<CashierSession | null>(null);
   const [selectedTable, setSelectedTable] = useState<Table | null>(null);
   const [activeOrder, setActiveOrder] = useState<Order | null>(null);
   const [activeCategory, setActiveCategory] = useState<string>('Todos');
@@ -33,6 +38,7 @@ const TableManager: React.FC = () => {
     const update = () => {
       setTables(db.getTables());
       setProducts(db.getProducts());
+      setSession(db.getCurrentSession());
       const allOrders = db.getOrders();
       setOrders(allOrders);
       if (selectedTable) {
@@ -235,6 +241,28 @@ const TableManager: React.FC = () => {
   const handlePrint = () => {
     window.print();
   };
+
+  if (!session) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[calc(100vh-120px)] bg-slate-50 animate-fade-in">
+        <div className="bg-white p-12 rounded-[3rem] shadow-2xl border border-slate-100 text-center space-y-8 max-w-md mx-auto">
+          <div className="w-24 h-24 bg-red-50 text-red-500 rounded-[2rem] flex items-center justify-center mx-auto text-5xl shadow-inner animate-pulse">
+            🔒
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-3xl font-black text-slate-800">Caixa Fechado</h2>
+            <p className="text-slate-500 font-medium">Para gerenciar mesas e comandas, o caixa deve estar aberto no painel de vendas.</p>
+          </div>
+          <button 
+            onClick={() => setActiveTab?.('pos')} 
+            className="w-full py-4 bg-orange-500 text-white font-black rounded-2xl shadow-lg hover:bg-orange-600 transition-all"
+          >
+            Ir para Frente de Caixa
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const categories = ['Todos', ...Array.from(new Set(products.map(p => p.category)))];
   const filteredProducts = activeCategory === 'Todos' 

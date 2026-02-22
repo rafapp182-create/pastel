@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { db } from '../services/mockDatabase';
-import { Product, OrderItem, OrderStatus } from '../types';
+import { Product, OrderItem, OrderStatus, BusinessSettings } from '../types';
 import ConfirmModal from '../components/ConfirmModal';
 
 interface CustomerMenuProps {
@@ -15,6 +15,7 @@ const CustomerMenu: React.FC<CustomerMenuProps> = ({ user, onLogout }) => {
   const [bannerUrl, setBannerUrl] = useState('https://picsum.photos/seed/pastel-hero/800/400');
   const [businessWhatsapp, setBusinessWhatsapp] = useState('');
   const [cart, setCart] = useState<OrderItem[]>([]);
+  const [settings, setSettings] = useState<BusinessSettings>(db.getSettings());
   const [showCart, setShowCart] = useState(false);
   const [isOrdering, setIsOrdering] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(false);
@@ -37,14 +38,10 @@ const CustomerMenu: React.FC<CustomerMenuProps> = ({ user, onLogout }) => {
     const update = () => {
       setProducts(db.getProducts().filter(p => p.active));
       setCategoriesList(db.getCategories().map(c => c.name));
+      setSettings(db.getSettings());
     };
     update();
     const unsub = db.subscribe(update);
-
-    db.getSettings().then(s => {
-      setBannerUrl(s.bannerUrl || 'https://picsum.photos/seed/pastel-hero/800/400');
-      setBusinessWhatsapp(s.businessWhatsapp || '');
-    });
 
     return unsub;
   }, []);
@@ -101,6 +98,7 @@ const CustomerMenu: React.FC<CustomerMenuProps> = ({ user, onLogout }) => {
   };
 
   const total = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+  const finalTotal = total + (settings.deliveryFee || 0);
 
   const formatWhatsappMessage = (orderItems: OrderItem[], orderTotal: number) => {
     let message = `*NOVO PEDIDO - HOJE PODE!* 🥟\n\n`;
@@ -122,20 +120,30 @@ const CustomerMenu: React.FC<CustomerMenuProps> = ({ user, onLogout }) => {
   const handlePlaceOrder = async () => {
     if (!user) return notify('Por favor, faça login para realizar o pedido.', 'error');
     if (cart.length === 0) return;
+    
+    if (total < settings.minOrderValue) {
+      return notify(`Pedido mínimo é de R$ ${settings.minOrderValue.toFixed(2)}`, 'error');
+    }
+
+    if (!settings.isOpen) {
+      return notify('Desculpe, a loja está fechada no momento.', 'error');
+    }
 
     setIsOrdering(true);
     try {
       const order = await db.createOrder({
         items: cart,
-        total,
+        total: finalTotal,
+        deliveryFee: settings.deliveryFee,
         status: OrderStatus.NOVO,
         customerName: user.name,
         customerAddress: user.address,
         customerWhatsapp: user.whatsapp,
-        customerId: user.id
+        customerId: user.id,
+        type: 'delivery'
       });
       
-      const whatsappMsg = formatWhatsappMessage(cart, total);
+      const whatsappMsg = formatWhatsappMessage(cart, finalTotal);
       setLastOrderId(order.id);
       
       // Limpa o carrinho local e no Firestore
@@ -208,7 +216,7 @@ const CustomerMenu: React.FC<CustomerMenuProps> = ({ user, onLogout }) => {
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center text-xl shadow-inner">🥟</div>
           <div>
-            <h1 className="text-xl font-black tracking-tight leading-none">Hoje Pode!</h1>
+            <h1 className="text-xl font-black tracking-tight leading-none">{settings.name}</h1>
             <p className="text-[10px] font-bold uppercase tracking-widest opacity-70 mt-1">Os melhores pastéis 🥟</p>
           </div>
         </div>
@@ -251,6 +259,13 @@ const CustomerMenu: React.FC<CustomerMenuProps> = ({ user, onLogout }) => {
             <div className="bg-green-500 text-white p-6 rounded-[2rem] font-black text-center animate-bounce-in shadow-xl shadow-green-100">
               <p className="text-xl mb-1">✅ Pedido Enviado!</p>
               <p className="text-[10px] uppercase tracking-widest opacity-80">Acompanhe pelo seu WhatsApp</p>
+            </div>
+          )}
+
+          {!settings.isOpen && (
+            <div className="bg-red-500 text-white p-6 rounded-[2rem] font-black text-center shadow-xl shadow-red-100 border-4 border-white">
+              <p className="text-xl mb-1">🚫 Loja Fechada</p>
+              <p className="text-[10px] uppercase tracking-widest opacity-80">Estamos fora do horário de atendimento: {settings.openingHours}</p>
             </div>
           )}
 
@@ -339,20 +354,30 @@ const CustomerMenu: React.FC<CustomerMenuProps> = ({ user, onLogout }) => {
                 ))}
               </div>
 
-              <div className="border-t border-slate-100 pt-4">
-                <div className="flex justify-between items-center text-2xl font-black text-slate-800 mb-6">
+              <div className="border-t border-slate-100 pt-4 space-y-2">
+                <div className="flex justify-between items-center text-slate-500 font-bold text-xs uppercase tracking-widest">
+                  <span>Subtotal</span>
+                  <span>R$ {total.toFixed(2)}</span>
+                </div>
+                {settings.deliveryFee > 0 && (
+                  <div className="flex justify-between items-center text-slate-500 font-bold text-xs uppercase tracking-widest">
+                    <span>Taxa de Entrega</span>
+                    <span>R$ {settings.deliveryFee.toFixed(2)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center text-2xl font-black text-slate-800 pt-2">
                   <span className="text-sm font-bold text-slate-400 uppercase tracking-widest">Total</span>
-                  <span className="text-orange-600">R$ {total.toFixed(2)}</span>
+                  <span className="text-orange-600">R$ {finalTotal.toFixed(2)}</span>
                 </div>
 
                 <button 
                   onClick={handlePlaceOrder}
                   disabled={isOrdering}
-                  className={`w-full py-5 rounded-2xl font-black text-lg shadow-xl transition-all ${
+                  className={`w-full py-5 rounded-2xl font-black text-lg shadow-xl transition-all mt-4 ${
                     isOrdering ? 'bg-slate-200 text-slate-400' : 'bg-orange-500 text-white hover:bg-orange-600 active:scale-95'
                   }`}
                 >
-                  {isOrdering ? 'Enviando...' : (businessWhatsapp ? 'Enviar via WhatsApp' : 'Confirmar Pedido')}
+                  {isOrdering ? 'Enviando...' : (settings.whatsapp ? 'Enviar via WhatsApp' : 'Confirmar Pedido')}
                 </button>
                 <p className="text-[9px] text-slate-400 text-center mt-4 font-bold uppercase tracking-widest">Pagamento na entrega</p>
               </div>

@@ -21,6 +21,7 @@ const POSPage: React.FC = () => {
   
   const [readyOrders, setReadyOrders] = useState<Order[]>([]);
   const [pendingPaymentOrders, setPendingPaymentOrders] = useState<Order[]>([]);
+  const [deliveryOrders, setDeliveryOrders] = useState<Order[]>([]);
   
   const [tables, setTables] = useState<Table[]>([]);
   const [showTableSelect, setShowTableSelect] = useState(false);
@@ -41,8 +42,14 @@ const POSPage: React.FC = () => {
       const ready = allOrders.filter(o => o.status === OrderStatus.FINALIZADO && !o.deliveredAt);
       setReadyOrders(ready);
 
-      const pending = allOrders.filter(o => o.status !== OrderStatus.PAGO);
+      const pending = allOrders.filter(o => o.status !== OrderStatus.PAGO && o.status !== OrderStatus.CANCELADO);
       setPendingPaymentOrders(pending);
+
+      const delivery = allOrders.filter(o => 
+        (o.type === 'delivery' || o.customerAddress) && 
+        (o.status === OrderStatus.FINALIZADO || o.status === OrderStatus.SAIU_ENTREGA)
+      );
+      setDeliveryOrders(delivery);
     };
     updateState();
     const unsub = db.subscribe(updateState);
@@ -57,6 +64,15 @@ const POSPage: React.FC = () => {
   const [isOpening, setIsOpening] = useState(false);
 
   const [showOpenModal, setShowOpenModal] = useState(false);
+
+  const handleUpdateStatus = async (orderId: string, status: OrderStatus) => {
+    try {
+      await db.updateOrderStatus(orderId, status);
+      notify(`Pedido atualizado para: ${status.toUpperCase()}`);
+    } catch (err: any) {
+      notify('Erro ao atualizar: ' + err.message, 'error');
+    }
+  };
 
   const handleOpenCashier = async () => {
     const val = parseFloat(openingValue);
@@ -412,6 +428,64 @@ const POSPage: React.FC = () => {
                           <span className="text-[8px] bg-slate-200 px-1.5 py-0.5 rounded uppercase font-bold text-slate-500">Pagar</span>
                        </div>
                     </button>
+                  ))
+                )}
+             </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm mt-4">
+             <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest">Entregas em Andamento</h3>
+                <span className="bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full text-[10px] font-black">{deliveryOrders.length}</span>
+             </div>
+             <div className="space-y-3">
+                {deliveryOrders.length === 0 ? (
+                  <p className="text-xs text-slate-300 italic">Nenhuma entrega ativa.</p>
+                ) : (
+                  deliveryOrders.map(o => (
+                    <div 
+                      key={o.id}
+                      className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3"
+                    >
+                       <div className="flex justify-between items-start">
+                          <div>
+                             <p className="font-black text-xs text-slate-900">#{o.id.split('-')[1]} - {o.customerName}</p>
+                             <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">{o.status.replace('_', ' ')}</p>
+                          </div>
+                          <p className="font-black text-orange-600 text-sm">R$ {o.total.toFixed(2)}</p>
+                       </div>
+                       
+                       <div className="bg-white p-2 rounded-xl border border-slate-100 text-[10px] space-y-1">
+                          <p className="text-slate-400 font-bold uppercase tracking-widest">Endereço:</p>
+                          <p className="text-slate-700 font-black leading-tight">{o.customerAddress}</p>
+                          {o.customerWhatsapp && <p className="text-green-600 font-black">📱 {o.customerWhatsapp}</p>}
+                       </div>
+
+                       <div className="flex gap-2">
+                          {o.status === OrderStatus.FINALIZADO && (
+                            <button 
+                              onClick={() => handleUpdateStatus(o.id, OrderStatus.SAIU_ENTREGA)}
+                              className="flex-1 py-2 bg-blue-500 text-white text-[10px] font-black uppercase tracking-widest rounded-lg shadow-md hover:bg-blue-600 transition-all"
+                            >
+                              🚀 Saiu p/ Entrega
+                            </button>
+                          )}
+                          {o.status === OrderStatus.SAIU_ENTREGA && (
+                            <button 
+                              onClick={() => handleUpdateStatus(o.id, OrderStatus.ENTREGUE)}
+                              className="flex-1 py-2 bg-green-600 text-white text-[10px] font-black uppercase tracking-widest rounded-lg shadow-md hover:bg-green-700 transition-all"
+                            >
+                              ✅ Entregue
+                            </button>
+                          )}
+                          <button 
+                            onClick={() => handleImportPending(o)}
+                            className="px-3 py-2 bg-slate-200 text-slate-600 text-[10px] font-black uppercase tracking-widest rounded-lg hover:bg-slate-300 transition-all"
+                          >
+                            💳 Pagar
+                          </button>
+                       </div>
+                    </div>
                   ))
                 )}
              </div>

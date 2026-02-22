@@ -56,6 +56,16 @@ class FirebaseDatabase {
     // Não inicia mais no construtor para evitar erros de permissão antes do login
   }
 
+  private cleanObject(obj: any) {
+    const newObj: any = {};
+    Object.keys(obj).forEach(key => {
+      if (obj[key] !== undefined && obj[key] !== null && !Number.isNaN(obj[key])) {
+        newObj[key] = obj[key];
+      }
+    });
+    return newObj;
+  }
+
   public async start(role: string, userId?: string) {
     // Limpa ouvintes anteriores se houver
     this.stop();
@@ -264,23 +274,27 @@ class FirebaseDatabase {
       // Se não houver sessão ativa em memória, tenta buscar a mais recente aberta
       let sessionId = this.currentSession?.id;
       if (!sessionId) {
-        const q = query(collection(firestore, "sessions"), where("status", "==", "open"), limit(1));
-        const snap = await getDocs(q);
-        if (!snap.empty) {
-          sessionId = snap.docs[0].id;
+        try {
+          const q = query(collection(firestore, "sessions"), where("status", "==", "open"), limit(1));
+          const snap = await getDocs(q);
+          if (!snap.empty) {
+            sessionId = snap.docs[0].id;
+          }
+        } catch (err) {
+          console.warn("Aviso: Não foi possível buscar sessão aberta:", err);
         }
       }
 
-      const orderData = {
+      const orderData = this.cleanObject({
         ...order,
         items: itemsWithDescription,
         createdAt: Date.now(),
         sessionId: sessionId || 'manual'
-      };
+      });
 
       const docRef = await addDoc(collection(firestore, "orders"), orderData);
       
-      if (order.tableNumber) {
+      if (order.tableNumber && !Number.isNaN(order.tableNumber)) {
         const table = this.tables.find(t => t.number === order.tableNumber);
         if (table) {
           await updateDoc(doc(firestore, "tables", table.id), {
@@ -344,12 +358,12 @@ class FirebaseDatabase {
 
   async updateOrderPayment(orderId: string, paymentType: PaymentType, amountReceived: number, change: number) {
     try {
-      const updateData = {
+      const updateData = this.cleanObject({
         paymentType,
         amountReceived,
         change,
         status: OrderStatus.PAGO
-      };
+      });
       
       await updateDoc(doc(firestore, "orders", orderId), updateData);
       

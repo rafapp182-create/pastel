@@ -193,7 +193,7 @@ const POSPage: React.FC = () => {
       } catch (err: any) {
         console.error("Erro ao registrar pedido:", err);
         setIsFinishing(false);
-        return notify('Erro ao registrar pedido no banco.', 'error');
+        return notify(`Erro ao registrar pedido: ${err.message || 'Verifique a conexão.'}`, 'error');
       }
 
       if (!order) {
@@ -212,7 +212,7 @@ const POSPage: React.FC = () => {
       notify('Venda finalizada com sucesso!');
     } catch (error: any) {
       console.error("Erro inesperado ao finalizar venda:", error);
-      notify("Erro inesperado. Tente novamente.", "error");
+      notify(`Erro inesperado: ${error.message || 'Tente novamente.'}`, "error");
       setIsFinishing(false);
     }
   };

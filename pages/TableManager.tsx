@@ -195,7 +195,7 @@ const TableManager: React.FC = () => {
       } catch (err: any) {
         console.error("Erro ao registrar pagamento da mesa:", err);
         setIsFinishing(false);
-        return notify('Erro ao registrar pagamento. Verifique permissões.', 'error');
+        return notify(`Erro ao registrar pagamento: ${err.message || 'Verifique permissões.'}`, 'error');
       }
 
       if (!finishedOrder) {
@@ -212,9 +212,9 @@ const TableManager: React.FC = () => {
       // Limpeza dos estados da mesa será feita ao fechar o recibo
       setAmountReceived('');
       notify('Pagamento realizado com sucesso!');
-    } catch (err) {
+    } catch (err: any) {
       console.error("Erro inesperado ao processar pagamento:", err);
-      notify("Erro inesperado. Tente novamente.", "error");
+      notify(`Erro inesperado: ${err.message || 'Tente novamente.'}`, "error");
       setIsFinishing(false);
     }
   };

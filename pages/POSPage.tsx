@@ -163,6 +163,7 @@ const POSPage: React.FC = () => {
           notify('Caixa aberto automaticamente para esta venda.');
         } catch (err: any) {
           console.error("Erro ao abrir caixa automaticamente:", err);
+          setIsFinishing(false);
           return notify('Erro ao abrir caixa. Verifique permissões.', 'error');
         }
       }
@@ -175,8 +176,7 @@ const POSPage: React.FC = () => {
       let order;
       try {
         if (manualPayOrder) {
-          await db.updateOrderPayment(manualPayOrder.id, paymentType, Number(amountReceived) || total, change);
-          order = db.getOrderById(manualPayOrder.id);
+          order = await db.updateOrderPayment(manualPayOrder.id, paymentType, Number(amountReceived) || total, change);
           setManualPayOrder(null);
         } else {
           order = await db.createOrder({
@@ -192,10 +192,16 @@ const POSPage: React.FC = () => {
         }
       } catch (err: any) {
         console.error("Erro ao registrar pedido:", err);
+        setIsFinishing(false);
         return notify('Erro ao registrar pedido no banco.', 'error');
       }
 
-      setLastOrder(order || null);
+      if (!order) {
+        setIsFinishing(false);
+        return notify('Erro ao recuperar dados do pedido.', 'error');
+      }
+
+      setLastOrder(order);
       setCart([]);
       setAmountReceived('');
       setTableNumber('');

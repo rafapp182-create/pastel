@@ -184,8 +184,9 @@ const TableManager: React.FC = () => {
     setIsFinishing(true);
     
     try {
+      let finishedOrder;
       try {
-        await db.updateOrderPayment(
+        finishedOrder = await db.updateOrderPayment(
           activeOrder.id,
           paymentType,
           paymentType === PaymentType.DINHEIRO ? Number(amountReceived) : total,
@@ -193,11 +194,16 @@ const TableManager: React.FC = () => {
         );
       } catch (err: any) {
         console.error("Erro ao registrar pagamento da mesa:", err);
+        setIsFinishing(false);
         return notify('Erro ao registrar pagamento. Verifique permissões.', 'error');
       }
 
-      const finishedOrder = db.getOrderById(activeOrder.id);
-      setLastOrder(finishedOrder || null);
+      if (!finishedOrder) {
+        setIsFinishing(false);
+        return notify('Erro ao recuperar dados do pagamento.', 'error');
+      }
+
+      setLastOrder(finishedOrder);
       
       setIsFinishing(false);
       setShowPaymentModal(false);

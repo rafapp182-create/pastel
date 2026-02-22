@@ -344,12 +344,14 @@ class FirebaseDatabase {
 
   async updateOrderPayment(orderId: string, paymentType: PaymentType, amountReceived: number, change: number) {
     try {
-      await updateDoc(doc(firestore, "orders", orderId), {
+      const updateData = {
         paymentType,
         amountReceived,
         change,
         status: OrderStatus.PAGO
-      });
+      };
+      
+      await updateDoc(doc(firestore, "orders", orderId), updateData);
       
       const order = this.orders.find(o => o.id === orderId);
       if (order?.tableNumber) {
@@ -361,6 +363,12 @@ class FirebaseDatabase {
           });
         }
       }
+
+      // Retorna o objeto atualizado mesclando os dados antigos com os novos
+      if (order) {
+        return { ...order, ...updateData } as Order;
+      }
+      return null;
     } catch (error) {
       console.error("Erro detalhado em updateOrderPayment:", error);
       throw error;

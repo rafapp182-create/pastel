@@ -9,30 +9,35 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Busca o papel do usuário na coleção 'users' de forma segura
-    function getRole() {
-      let userPath = /databases/$(database)/documents/users/$(request.auth.uid);
-      return exists(userPath) ? get(userPath).data.role : 'customer';
+    // Função otimizada para buscar o papel do usuário
+    function getUserRole() {
+      let path = /databases/$(database)/documents/users/$(request.auth.uid);
+      let userDoc = exists(path) ? get(path) : null;
+      return userDoc != null && 'role' in userDoc.data ? userDoc.data.role : 'customer';
+    }
+
+    function hasRole(roles) {
+      return isSignedIn() && getUserRole() in roles;
     }
 
     function isAdmin() {
-      return isSignedIn() && getRole() == 'admin';
+      return hasRole(['admin']);
     }
 
     function isCaixa() {
-      return isSignedIn() && getRole() == 'caixa';
+      return hasRole(['caixa']);
     }
 
     function isCozinha() {
-      return isSignedIn() && getRole() == 'cozinha';
+      return hasRole(['cozinha']);
     }
 
     function isCustomer() {
-      return isSignedIn() && getRole() == 'customer';
+      return hasRole(['customer']);
     }
 
     function isStaff() {
-      return isAdmin() || isCaixa() || isCozinha();
+      return hasRole(['admin', 'caixa', 'cozinha']);
     }
 
     // --- REGRAS POR COLEÇÃO ---
@@ -96,7 +101,7 @@ service cloud.firestore {
     // Categorias: Organização do cardápio
     match /categories/{categoryId} {
       allow read: if true;
-      allow write: if isAdmin() || isCaixa();
+      allow write: if isStaff();
     }
 
     // Carrinhos: Persistência de itens por usuário

@@ -189,7 +189,8 @@ const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
       setNewCategoryName('');
       notify('Categoria adicionada!');
     } catch (err: any) {
-      console.error("Erro ao adicionar categoria:", err);
+      console.error("Erro detalhado ao adicionar categoria:", err);
+      console.log("User state during error:", user);
       notify('Erro ao adicionar categoria: ' + (err.message || 'Verifique a conexão.'), 'error');
     } finally {
       setIsAddingCategory(false);

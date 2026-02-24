@@ -36,6 +36,14 @@ export interface Product {
   price: number;
   imageUrl: string;
   active: boolean;
+  options?: ProductOption[];
+  ingredients?: string[];
+}
+
+export interface ProductOption {
+  name: string;
+  choices: string[];
+  required: boolean;
 }
 
 export interface Category {
@@ -50,6 +58,8 @@ export interface OrderItem {
   description?: string;
   quantity: number;
   price: number;
+  notes?: string;
+  selectedOptions?: Record<string, string>;
 }
 
 export interface Order {
@@ -70,7 +80,7 @@ export interface Order {
   createdAt: number;
   deliveredAt?: number;
   sessionId?: string;
-  type: 'delivery' | 'table' | 'counter';
+  type: 'delivery' | 'table' | 'counter' | 'pickup';
 }
 
 export interface BusinessSettings {

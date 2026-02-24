@@ -48,7 +48,9 @@ const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
       description: '',
       category: '',
       price: '',
-      imageUrl: ''
+      imageUrl: '',
+      ingredients: '',
+      options: [] as ProductOption[]
   });
 
   useEffect(() => {
@@ -120,10 +122,16 @@ const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
       e.preventDefault();
       if (!newProduct.name || !newProduct.price) return notify('Preencha os campos obrigatórios.', 'error');
 
+      const ingredientsArray = newProduct.ingredients 
+        ? newProduct.ingredients.split(',').map(i => i.trim()).filter(i => i !== '')
+        : [];
+
       if (editingProduct) {
         await db.updateProduct(editingProduct.id, {
           ...newProduct,
-          price: parseFloat(newProduct.price)
+          price: parseFloat(newProduct.price),
+          options: newProduct.options,
+          ingredients: ingredientsArray
         });
         setEditingProduct(null);
         notify('Produto atualizado com sucesso!');
@@ -132,12 +140,14 @@ const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
             ...newProduct,
             price: parseFloat(newProduct.price),
             active: true,
-            imageUrl: newProduct.imageUrl || `https://picsum.photos/seed/${newProduct.name}/300/200`
+            imageUrl: newProduct.imageUrl || `https://picsum.photos/seed/${newProduct.name}/300/200`,
+            options: newProduct.options,
+            ingredients: ingredientsArray
         });
         notify('Produto cadastrado com sucesso!');
       }
 
-      setNewProduct({ name: '', description: '', category: categories[0]?.name || 'Pasteis de Carne', price: '', imageUrl: '' });
+      setNewProduct({ name: '', description: '', category: categories[0]?.name || 'Pasteis de Carne', price: '', imageUrl: '', ingredients: '', options: [] });
   };
 
   const handleEditProduct = (p: Product) => {
@@ -147,7 +157,9 @@ const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
       description: p.description,
       category: p.category,
       price: p.price.toString(),
-      imageUrl: p.imageUrl
+      imageUrl: p.imageUrl,
+      ingredients: p.ingredients ? p.ingredients.join(', ') : '',
+      options: p.options || []
     });
     setActiveSubTab('inventory');
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -590,13 +602,99 @@ const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
                 </div>
               </div>
               <div className="md:col-span-2 space-y-2">
-                <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Descrição / Ingredientes</label>
+                <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Descrição</label>
                 <textarea 
                   className="w-full bg-slate-100 text-slate-900 rounded-2xl p-4 outline-none focus:ring-2 focus:ring-orange-500 h-24 font-medium border-none" 
                   value={newProduct.description} 
                   onChange={e => setNewProduct({...newProduct, description: e.target.value})} 
                 />
               </div>
+              <div className="md:col-span-2 space-y-2">
+                <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Ingredientes (separados por vírgula)</label>
+                <input 
+                  className="w-full bg-slate-100 text-slate-900 rounded-2xl p-4 outline-none focus:ring-2 focus:ring-orange-500 font-bold border-none" 
+                  value={newProduct.ingredients} 
+                  onChange={e => setNewProduct({...newProduct, ingredients: e.target.value})} 
+                  placeholder="Ex: Carne moída, Ovo, Azeitona" 
+                />
+              </div>
+
+              {/* Opções do Produto */}
+              <div className="md:col-span-2 space-y-4 bg-slate-50 p-6 rounded-[2rem] border border-slate-100">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Opções de Personalização</h3>
+                  <button 
+                    type="button"
+                    onClick={() => setNewProduct({
+                      ...newProduct, 
+                      options: [...(newProduct.options || []), { name: '', choices: [], required: false }]
+                    })}
+                    className="bg-slate-900 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-orange-500 transition-all"
+                  >
+                    + Adicionar Grupo
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  {newProduct.options?.map((opt, optIdx) => (
+                    <div key={optIdx} className="bg-white p-4 rounded-2xl border border-slate-100 space-y-3 shadow-sm">
+                      <div className="flex gap-4 items-start">
+                        <div className="flex-1 space-y-2">
+                          <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Nome do Grupo (ex: Recheio)</label>
+                          <input 
+                            className="w-full bg-slate-100 rounded-xl p-3 text-sm font-bold outline-none focus:ring-2 focus:ring-orange-500"
+                            value={opt.name}
+                            onChange={e => {
+                              const opts = [...newProduct.options];
+                              opts[optIdx].name = e.target.value;
+                              setNewProduct({ ...newProduct, options: opts });
+                            }}
+                          />
+                        </div>
+                        <div className="flex flex-col items-center gap-1 pt-6">
+                          <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Obrigatório?</label>
+                          <input 
+                            type="checkbox"
+                            checked={opt.required}
+                            onChange={e => {
+                              const opts = [...newProduct.options];
+                              opts[optIdx].required = e.target.checked;
+                              setNewProduct({ ...newProduct, options: opts });
+                            }}
+                            className="w-5 h-5 accent-orange-500"
+                          />
+                        </div>
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            const opts = [...newProduct.options];
+                            opts.splice(optIdx, 1);
+                            setNewProduct({ ...newProduct, options: opts });
+                          }}
+                          className="pt-8 text-red-400 hover:text-red-600"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Escolhas (separadas por vírgula)</label>
+                        <input 
+                          className="w-full bg-slate-100 rounded-xl p-3 text-sm font-medium outline-none focus:ring-2 focus:ring-orange-500"
+                          placeholder="Ex: Carne, Queijo, Frango"
+                          value={opt.choices.join(', ')}
+                          onChange={e => {
+                            const opts = [...newProduct.options];
+                            opts[optIdx].choices = e.target.value.split(',').map(s => s.trim()).filter(s => s !== '');
+                            setNewProduct({ ...newProduct, options: opts });
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               <button className="md:col-span-2 bg-orange-500 text-white font-black py-5 rounded-2xl hover:bg-orange-600 transition-all shadow-xl active:scale-95 text-lg">
                 {editingProduct ? 'Salvar Alterações' : 'Salvar Item'}
               </button>
@@ -608,7 +706,8 @@ const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
               <span>📋</span> Lista de Produtos
             </h2>
             <div className="overflow-x-auto">
-              <table className="w-full text-left">
+              {/* Desktop Table View */}
+              <table className="hidden md:table w-full text-left">
                 <thead className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-widest">
                   <tr>
                     <th className="px-8 py-4">Foto</th>
@@ -642,6 +741,29 @@ const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
                   ))}
                 </tbody>
               </table>
+
+              {/* Mobile Card View */}
+              <div className="md:hidden divide-y divide-slate-100">
+                {products.filter(p => p.active !== false).map(p => (
+                  <div key={p.id} className="p-4 flex items-center gap-4">
+                    <img 
+                      src={p.imageUrl} 
+                      referrerPolicy="no-referrer"
+                      className="w-16 h-16 rounded-xl object-cover shadow-sm" 
+                      alt={p.name} 
+                    />
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-black text-slate-800 text-sm truncate">{p.name}</h4>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase">{p.category}</p>
+                      <p className="font-black text-orange-600 text-sm mt-1">R$ {p.price.toFixed(2)}</p>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <button onClick={() => handleEditProduct(p)} className="bg-blue-50 text-blue-500 p-2 rounded-lg">✏️</button>
+                      <button onClick={() => db.deleteProduct(p.id)} className="bg-red-50 text-red-500 p-2 rounded-lg">🗑️</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -739,7 +861,8 @@ const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
               </button>
               {expandedDate === date && (
                 <div className="px-6 pb-6 border-t border-slate-50 animate-slide-down overflow-x-auto">
-                  <table className="w-full text-left mt-4">
+                  {/* Desktop Table */}
+                  <table className="hidden sm:table w-full text-left mt-4">
                     <thead className="text-[9px] font-black uppercase text-slate-300">
                       <tr><th className="py-2">Hora</th><th>Local</th><th>Pagamento</th><th className="text-right">Total</th></tr>
                     </thead>
@@ -754,6 +877,18 @@ const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
                       ))}
                     </tbody>
                   </table>
+                  {/* Mobile List */}
+                  <div className="sm:hidden divide-y divide-slate-50 mt-4">
+                    {dailyHistory[date].orders.map(o => (
+                      <div key={o.id} className="py-3 flex justify-between items-center text-xs">
+                        <div>
+                          <p className="font-bold text-slate-900">{o.tableNumber ? `Mesa ${o.tableNumber}` : 'Balcão'}</p>
+                          <p className="text-[10px] text-slate-400">{new Date(o.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} • {o.paymentType}</p>
+                        </div>
+                        <p className="font-black text-slate-900">R$ {o.total.toFixed(2)}</p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -781,7 +916,8 @@ const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
             </form>
           </div>
           <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
-            <table className="w-full text-left">
+            {/* Desktop Table */}
+            <table className="hidden sm:table w-full text-left">
               <thead className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-widest">
                 <tr><th className="px-8 py-4">Nome</th><th className="px-8 py-4">Cargo</th><th className="px-8 py-4 text-center">Ações</th></tr>
               </thead>
@@ -797,6 +933,18 @@ const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
                 ))}
               </tbody>
             </table>
+            {/* Mobile List */}
+            <div className="sm:hidden divide-y divide-slate-50">
+              {users.map(u => (
+                <div key={u.id} className="p-4 flex justify-between items-center">
+                  <div>
+                    <p className="font-bold text-slate-900">{u.name}</p>
+                    <p className="text-[10px] font-black uppercase text-orange-600">{u.role}</p>
+                  </div>
+                  <button onClick={() => handleDeleteUser(u.id)} className="bg-red-50 text-red-500 p-2 rounded-lg">🗑️</button>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}

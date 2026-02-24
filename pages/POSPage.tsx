@@ -244,6 +244,71 @@ const POSPage: React.FC = () => {
     window.print();
   };
 
+  const isKitchenItem = (itemName: string) => {
+    const n = itemName.toLowerCase();
+    return n.includes('pastel') || n.includes('suco') || n.includes('cana');
+  };
+
+  const handlePrintKitchen = (order: Order) => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    const kitchenItems = order.items.filter(item => isKitchenItem(item.name));
+    const dateStr = new Date(order.createdAt).toLocaleString();
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Cozinha #${order.id.split('-')[1]}</title>
+          <style>
+            body { font-family: 'Courier New', Courier, monospace; width: 80mm; margin: 0; padding: 5mm; }
+            .header { text-align: center; border-bottom: 1px dashed #000; padding-bottom: 5mm; margin-bottom: 5mm; }
+            .order-info { margin-bottom: 5mm; }
+            .item { display: flex; justify-content: space-between; margin-bottom: 2mm; font-weight: bold; }
+            .item-details { font-size: 0.8em; margin-bottom: 3mm; padding-left: 5mm; font-style: italic; }
+            .footer { border-top: 1px dashed #000; padding-top: 5mm; margin-top: 5mm; text-align: center; font-size: 0.8em; }
+            @media print {
+              @page { margin: 0; }
+              body { margin: 0; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h2 style="margin: 0;">HOJE PODE!</h2>
+            <p style="margin: 5px 0 0 0;">COZINHA</p>
+          </div>
+          <div class="order-info">
+            <strong>PEDIDO: #${order.id.split('-')[1]}</strong><br>
+            <strong>LOCAL: ${order.tableNumber ? `MESA ${order.tableNumber}` : 'BALCÃO'}</strong><br>
+            DATA: ${dateStr}<br>
+            ${order.customerName ? `CLIENTE: ${order.customerName}<br>` : ''}
+          </div>
+          <div class="items">
+            ${kitchenItems.map(item => `
+              <div class="item">
+                <span>${item.quantity}x ${item.name}</span>
+              </div>
+              ${item.description ? `<div class="item-details">- ${item.description}</div>` : ''}
+              ${item.selectedOptions ? Object.entries(item.selectedOptions).map(([k, v]) => `<div class="item-details">* ${k}: ${v}</div>`).join('') : ''}
+              ${item.notes ? `<div class="item-details">OBS: ${item.notes}</div>` : ''}
+            `).join('')}
+          </div>
+          <div class="footer">
+            <p>Bom trabalho!</p>
+          </div>
+          <script>
+            window.onload = () => {
+              window.print();
+              window.close();
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
   const getSessionSummary = () => {
     if (!session) return null;
     const sessionOrders = db.getOrders().filter(o => o.sessionId === session.id && o.paymentType);
@@ -271,6 +336,8 @@ const POSPage: React.FC = () => {
   };
 
   const sessionSummary = getSessionSummary();
+
+  const [showMobileCart, setShowMobileCart] = useState(false);
 
   const Toast = () => (
     notification ? (
@@ -317,6 +384,19 @@ const POSPage: React.FC = () => {
   return (
     <div className="flex flex-col gap-6 h-full relative">
       <Toast />
+
+      {/* Mobile Cart Toggle */}
+      <div className="lg:hidden fixed bottom-24 right-4 z-[60] flex flex-col gap-2">
+        {cart.length > 0 && (
+          <button 
+            onClick={() => setShowMobileCart(true)}
+            className="bg-slate-900 text-white p-4 rounded-full shadow-2xl flex items-center gap-3 border-4 border-white animate-bounce-in"
+          >
+            <span className="text-2xl">🛒</span>
+            <span className="font-black text-sm">R$ {cartTotal.toFixed(2)}</span>
+          </button>
+        )}
+      </div>
 
       {/* Notificações de Pronto */}
       {readyOrders.length > 0 && (
@@ -492,21 +572,32 @@ const POSPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-white rounded-3xl shadow-xl p-6 border border-slate-100 flex flex-col sticky top-4 h-[calc(100vh-160px)] print:hidden">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-slate-800">Venda Atual</h2>
-            <div className="flex gap-2">
-              <button 
-                onClick={() => setShowTableSelect(true)}
-                className="text-xs bg-orange-50 text-orange-600 px-3 py-1.5 rounded-full font-bold hover:bg-orange-500 hover:text-white transition-all border border-orange-200"
-              >
-                📂 Comandas
-              </button>
-              {manualPayOrder && (
-                <button onClick={() => { setManualPayOrder(null); setCart([]); }} className="text-xs text-red-500 font-bold px-2">Limpar</button>
-              )}
+        {/* Right Side: Cart (Desktop) / Mobile Drawer */}
+        <div className={`
+          ${showMobileCart ? 'fixed inset-0 z-[100] p-4 bg-slate-900/60 backdrop-blur-sm flex items-end' : 'hidden lg:flex'}
+          lg:relative lg:inset-auto lg:z-0 lg:p-0 lg:bg-transparent lg:backdrop-blur-none
+        `}>
+          <div className={`
+            bg-white rounded-3xl shadow-xl p-6 border border-slate-100 flex flex-col sticky top-4 h-[calc(100vh-160px)] print:hidden w-full
+            ${showMobileCart ? 'animate-slide-up max-h-[90vh]' : ''}
+          `}>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-slate-800">Venda Atual</h2>
+              <div className="flex gap-2">
+                {showMobileCart && (
+                  <button onClick={() => setShowMobileCart(false)} className="lg:hidden text-slate-400 p-2">✕</button>
+                )}
+                <button 
+                  onClick={() => setShowTableSelect(true)}
+                  className="text-xs bg-orange-50 text-orange-600 px-3 py-1.5 rounded-full font-bold hover:bg-orange-500 hover:text-white transition-all border border-orange-200"
+                >
+                  📂 Comandas
+                </button>
+                {manualPayOrder && (
+                  <button onClick={() => { setManualPayOrder(null); setCart([]); }} className="text-xs text-red-500 font-bold px-2">Limpar</button>
+                )}
+              </div>
             </div>
-          </div>
 
           <div className="mb-4">
             <input 
@@ -562,6 +653,7 @@ const POSPage: React.FC = () => {
           </div>
         </div>
       </div>
+    </div>
 
       {showOpenModal && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
@@ -747,9 +839,15 @@ const POSPage: React.FC = () => {
               </div>
               <div className="border-y-2 border-slate-300 py-2 space-y-2">
                 {lastOrder.items.map((item, i) => (
-                  <div key={i} className="flex justify-between text-[11px] font-bold border-b border-slate-100 pb-1">
-                    <span className="flex-[3] text-left">{item.quantity}x {item.name}</span>
-                    <span className="flex-1 text-right">R$ {(item.price * item.quantity).toFixed(2)}</span>
+                  <div key={i} className="border-b border-slate-100 pb-1">
+                    <div className="flex justify-between text-[11px] font-bold">
+                      <span className="flex-[3] text-left">{item.quantity}x {item.name}</span>
+                      <span className="flex-1 text-right">R$ {(item.price * item.quantity).toFixed(2)}</span>
+                    </div>
+                    {item.selectedOptions && Object.entries(item.selectedOptions).map(([k, v]) => (
+                      <div key={k} className="text-[9px] text-slate-500 italic ml-4">* {k}: {v}</div>
+                    ))}
+                    {item.notes && <div className="text-[9px] text-slate-500 italic ml-4">OBS: {item.notes}</div>}
                   </div>
                 ))}
               </div>
@@ -768,9 +866,12 @@ const POSPage: React.FC = () => {
                 </div>
               )}
             </div>
-            <div className="flex gap-3 print:hidden">
-              <button onClick={handlePrint} className="flex-1 bg-slate-800 text-white py-4 rounded-2xl font-black">Imprimir</button>
-              <button onClick={() => setShowReceipt(false)} className="flex-1 bg-orange-500 text-white py-4 rounded-2xl font-black">Novo Pedido</button>
+            <div className="flex flex-col gap-2 print:hidden">
+              <div className="flex gap-2">
+                <button onClick={handlePrint} className="flex-1 bg-slate-800 text-white py-4 rounded-2xl font-black">Imprimir Recibo</button>
+                <button onClick={() => handlePrintKitchen(lastOrder)} className="flex-1 bg-slate-100 text-slate-800 py-4 rounded-2xl font-black border border-slate-200">Imprimir Cozinha</button>
+              </div>
+              <button onClick={() => setShowReceipt(false)} className="w-full bg-orange-500 text-white py-4 rounded-2xl font-black">Novo Pedido</button>
             </div>
           </div>
         </div>

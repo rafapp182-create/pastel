@@ -33,6 +33,25 @@ const TableManager: React.FC<TableManagerProps> = ({ setActiveTab }) => {
   // Nome do cliente
   const [customerName, setCustomerName] = useState('');
   const [isEditingName, setIsEditingName] = useState(false);
+  const [showMobileComanda, setShowMobileComanda] = useState(false);
+
+  // Fullscreen effect
+  useEffect(() => {
+    if (selectedTable) {
+      const element = document.documentElement;
+      if (element.requestFullscreen) {
+        element.requestFullscreen().catch(err => {
+          console.log(`Error attempting to enable full-screen mode: ${err.message}`);
+        });
+      }
+    } else {
+      if (document.fullscreenElement) {
+        document.exitFullscreen().catch(err => {
+          console.log(`Error attempting to exit full-screen mode: ${err.message}`);
+        });
+      }
+    }
+  }, [selectedTable]);
 
   useEffect(() => {
     const update = () => {
@@ -542,7 +561,14 @@ const TableManager: React.FC<TableManagerProps> = ({ setActiveTab }) => {
                </div>
              </div>
              <div className="flex items-center gap-3">
-                <div className="text-right">
+                <button 
+                  onClick={() => setShowMobileComanda(true)}
+                  className="md:hidden bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-xl flex items-center gap-2 transition-all"
+                >
+                  <span className="text-sm">📋</span>
+                  <span className="font-black text-xs">Ver Comanda</span>
+                </button>
+                <div className="text-right hidden sm:block">
                   <p className="text-[10px] opacity-70 font-bold uppercase">Consumo Total</p>
                   <p className="font-black text-xl">R$ {(activeOrder?.total || 0).toFixed(2)}</p>
                 </div>
@@ -550,6 +576,17 @@ const TableManager: React.FC<TableManagerProps> = ({ setActiveTab }) => {
           </div>
 
           <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
+            {/* Floating button for mobile comanda */}
+            {(activeOrder?.items.length || 0) > 0 && (
+              <button 
+                onClick={() => setShowMobileComanda(true)}
+                className="md:hidden fixed bottom-6 right-6 z-[208] bg-orange-500 text-white p-4 rounded-full shadow-2xl flex items-center gap-2 border-4 border-white animate-bounce-in"
+              >
+                <span className="text-xl">📋</span>
+                <span className="font-black text-sm">R$ {activeOrder?.total.toFixed(2)}</span>
+              </button>
+            )}
+
             <div className="flex-1 flex flex-col p-4 md:p-6 space-y-4 overflow-hidden bg-white md:bg-transparent border-r border-slate-200">
               <div className="flex flex-wrap gap-2 overflow-x-auto pb-2 scrollbar-hide">
                 {categories.map(cat => (
@@ -576,6 +613,9 @@ const TableManager: React.FC<TableManagerProps> = ({ setActiveTab }) => {
                   >
                     <div className="relative aspect-square rounded-xl overflow-hidden mb-2">
                       <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                      <div className="absolute bottom-1 right-1 bg-orange-500 text-white w-6 h-6 rounded-lg flex items-center justify-center shadow-lg border border-white/20">
+                        <span className="text-xs font-black">+</span>
+                      </div>
                     </div>
                     <h4 className="font-black text-slate-800 text-[10px] line-clamp-2 h-7 leading-tight">{p.name}</h4>
                     <p className="font-black text-orange-600 text-xs mt-1">R$ {p.price.toFixed(2)}</p>
@@ -584,14 +624,25 @@ const TableManager: React.FC<TableManagerProps> = ({ setActiveTab }) => {
               </div>
             </div>
 
-            <div className="w-full md:w-[450px] bg-white flex flex-col shadow-[-10px_0_30px_rgba(0,0,0,0.05)] z-[205]">
-              <div className="p-6 border-b border-slate-50">
-                 <h4 className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Resumo da Mesa</h4>
-                 {isTableReady(selectedTable) && (
-                   <div className="mt-2 bg-green-100 text-green-700 px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-widest animate-pulse border border-green-200">
-                     ✨ Pedido pronto para entrega!
-                   </div>
-                 )}
+            <div className={`w-full md:w-[450px] bg-white flex flex-col shadow-[-10px_0_30px_rgba(0,0,0,0.05)] z-[205] 
+              fixed inset-0 md:relative md:inset-auto transform transition-transform duration-300 ease-in-out
+              ${showMobileComanda ? 'translate-y-0' : 'translate-y-full md:translate-y-0'}
+            `}>
+              <div className="p-6 border-b border-slate-50 flex justify-between items-center">
+                 <div>
+                   <h4 className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Resumo da Mesa</h4>
+                   {isTableReady(selectedTable) && (
+                     <div className="mt-2 bg-green-100 text-green-700 px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-widest animate-pulse border border-green-200">
+                       ✨ Pedido pronto!
+                     </div>
+                   )}
+                 </div>
+                 <button 
+                   onClick={() => setShowMobileComanda(false)}
+                   className="md:hidden p-2 text-slate-400 hover:text-slate-600"
+                 >
+                   ✕
+                 </button>
               </div>
               
               <div className="flex-1 overflow-y-auto p-6 space-y-4 scrollbar-thin">

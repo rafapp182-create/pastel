@@ -68,6 +68,66 @@ const KitchenPage: React.FC = () => {
     }
   };
 
+  const handlePrint = (order: Order) => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    const kitchenItems = order.items.filter(item => isKitchenItem(item.name));
+    const dateStr = new Date(order.createdAt).toLocaleString();
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Pedido #${order.id.split('-')[1]}</title>
+          <style>
+            body { font-family: 'Courier New', Courier, monospace; width: 80mm; margin: 0; padding: 5mm; }
+            .header { text-align: center; border-bottom: 1px dashed #000; padding-bottom: 5mm; margin-bottom: 5mm; }
+            .order-info { margin-bottom: 5mm; }
+            .item { display: flex; justify-content: space-between; margin-bottom: 2mm; font-weight: bold; }
+            .item-details { font-size: 0.8em; margin-bottom: 3mm; padding-left: 5mm; font-style: italic; }
+            .footer { border-top: 1px dashed #000; padding-top: 5mm; margin-top: 5mm; text-align: center; font-size: 0.8em; }
+            @media print {
+              @page { margin: 0; }
+              body { margin: 0; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h2 style="margin: 0;">HOJE PODE!</h2>
+            <p style="margin: 5px 0 0 0;">COZINHA</p>
+          </div>
+          <div class="order-info">
+            <strong>PEDIDO: #${order.id.split('-')[1]}</strong><br>
+            <strong>LOCAL: ${order.tableNumber ? `MESA ${order.tableNumber}` : 'BALCÃO'}</strong><br>
+            DATA: ${dateStr}<br>
+            ${order.customerName ? `CLIENTE: ${order.customerName}<br>` : ''}
+          </div>
+          <div class="items">
+            ${kitchenItems.map(item => `
+              <div class="item">
+                <span>${item.quantity}x ${item.name}</span>
+              </div>
+              ${item.description ? `<div class="item-details">- ${item.description}</div>` : ''}
+              ${item.selectedOptions ? Object.entries(item.selectedOptions).map(([k, v]) => `<div class="item-details">* ${k}: ${v}</div>`).join('') : ''}
+              ${item.notes ? `<div class="item-details">OBS: ${item.notes}</div>` : ''}
+            `).join('')}
+          </div>
+          <div class="footer">
+            <p>Bom trabalho!</p>
+          </div>
+          <script>
+            window.onload = () => {
+              window.print();
+              window.close();
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
   return (
     <div className="space-y-6 relative">
       {/* Notificação Flutuante */}
@@ -128,24 +188,21 @@ const KitchenPage: React.FC = () => {
                         <span>👤</span> {order.customerName}
                       </div>
                     )}
-                    {order.customerAddress && (
-                      <div className="text-slate-500 font-bold text-[10px] uppercase mt-1 flex items-center gap-1">
-                        <span>📍</span> {order.customerAddress}
-                      </div>
-                    )}
-                    {order.customerWhatsapp && (
-                      <div className="text-green-600 font-bold text-[10px] uppercase flex items-center gap-1">
-                        <span>📱</span> {order.customerWhatsapp}
-                      </div>
-                    )}
-                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-2">
-                      Recebido às {new Date(order.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                    </p>
                   </div>
-                  <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${
-                    order.status === OrderStatus.NOVO ? 'bg-red-100 text-red-600' : 'bg-yellow-100 text-yellow-600'
-                  }`}>
-                    {order.status}
+                  <div className="flex flex-col items-end gap-2">
+                    <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${
+                      order.status === OrderStatus.NOVO ? 'bg-red-100 text-red-600' : 'bg-yellow-100 text-yellow-600'
+                    }`}>
+                      {order.status}
+                    </div>
+                    <button 
+                      onClick={() => handlePrint(order)}
+                      className="bg-slate-100 hover:bg-slate-200 text-slate-600 p-2 rounded-xl transition-colors flex items-center gap-2 text-[10px] font-black uppercase"
+                      title="Imprimir Pedido"
+                    >
+                      <span>🖨️</span>
+                      <span className="hidden sm:inline">Imprimir</span>
+                    </button>
                   </div>
                 </div>
 
@@ -223,11 +280,20 @@ const KitchenPage: React.FC = () => {
                         {new Date(order.createdAt).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}
                       </td>
                       <td className="px-6 py-4 text-center">
-                        <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase ${
-                          order.status === OrderStatus.PAGO ? 'bg-slate-800 text-white' : 'bg-green-100 text-green-700'
-                        }`}>
-                          {order.status === OrderStatus.PAGO ? 'ENTREGUE/PAGO' : 'PRONTO'}
-                        </span>
+                        <div className="flex justify-center gap-2">
+                          <button 
+                            onClick={() => handlePrint(order)}
+                            className="text-slate-400 hover:text-slate-600 p-1"
+                            title="Reimprimir"
+                          >
+                            🖨️
+                          </button>
+                          <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase ${
+                            order.status === OrderStatus.PAGO ? 'bg-slate-800 text-white' : 'bg-green-100 text-green-700'
+                          }`}>
+                            {order.status === OrderStatus.PAGO ? 'ENTREGUE/PAGO' : 'PRONTO'}
+                          </span>
+                        </div>
                       </td>
                     </tr>
                   ))

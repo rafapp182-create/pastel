@@ -9,6 +9,7 @@ import {
   query, 
   orderBy, 
   getDocs,
+  getDoc,
   limit,
   where,
   deleteDoc,
@@ -36,16 +37,16 @@ const initialCategories = [
 ];
 
 const initialProducts: Product[] = [
-  { id: '1', name: 'Pastel de Carne', description: 'Carne moída temperada, ovo e azeitona', category: 'Pasteis de Carne', price: 12.50, imageUrl: 'https://picsum.photos/seed/p1/300/200', active: true },
-  { id: '2', name: 'Carne com Queijo', description: 'Carne moída com mussarela derretida', category: 'Pasteis de Carne', price: 13.50, imageUrl: 'https://picsum.photos/seed/p12/300/200', active: true },
-  { id: '3', name: 'Pastel de Frango', description: 'Frango desfiado temperado', category: 'Pasteis de Frango', price: 11.00, imageUrl: 'https://picsum.photos/seed/p2/300/200', active: true },
-  { id: '4', name: 'Frango c/ Catupiry', description: 'Frango desfiado com o legítimo Catupiry', category: 'Pasteis de Frango', price: 14.00, imageUrl: 'https://picsum.photos/seed/p3/300/200', active: true },
-  { id: '5', name: '4 Queijos Especial', description: 'Mussarela, provolone, parmesão e gorgonzola', category: 'Pasteis Especiais', price: 16.00, imageUrl: 'https://picsum.photos/seed/p4/300/200', active: true },
-  { id: '6', name: 'Pastel de Bacalhau', description: 'Bacalhau do porto desfiado com azeitonas', category: 'Pasteis Especiais', price: 22.00, imageUrl: 'https://picsum.photos/seed/p13/300/200', active: true },
-  { id: '7', name: 'Caldo de Cana 500ml', description: 'Moído na hora, bem geladinho', category: 'Bebidas', price: 8.00, imageUrl: 'https://picsum.photos/seed/p5/300/200', active: true },
-  { id: '8', name: 'Coca-Cola Lata', description: '350ml gelada', category: 'Bebidas', price: 6.50, imageUrl: 'https://picsum.photos/seed/p6/300/200', active: true },
-  { id: '9', name: 'Pastel de Camarão', description: 'Camarões selecionados com molho especial', category: 'Pasteis Especiais', price: 25.00, imageUrl: 'https://picsum.photos/seed/p14/300/200', active: true },
-  { id: '10', name: 'Encomenda Cento Mini', description: 'Cento de mini pastéis variados para festas', category: 'Encomendas', price: 120.00, imageUrl: 'https://picsum.photos/seed/p15/300/200', active: true },
+  { id: '1', name: 'Pastel de Carne', description: 'Carne moída temperada, ovo e azeitona', category: 'Pasteis de Carne', price: 12.50, imageUrl: 'https://picsum.photos/seed/p1/300/200', active: true, ingredients: ['Carne moída', 'Ovo', 'Azeitona', 'Tempero da casa'] },
+  { id: '2', name: 'Carne com Queijo', description: 'Carne moída com mussarela derretida', category: 'Pasteis de Carne', price: 13.50, imageUrl: 'https://picsum.photos/seed/p12/300/200', active: true, ingredients: ['Carne moída', 'Mussarela', 'Tempero da casa'] },
+  { id: '3', name: 'Pastel de Frango', description: 'Frango desfiado temperado', category: 'Pasteis de Frango', price: 11.00, imageUrl: 'https://picsum.photos/seed/p2/300/200', active: true, ingredients: ['Frango desfiado', 'Tempero da casa'] },
+  { id: '4', name: 'Frango c/ Catupiry', description: 'Frango desfiado com o legítimo Catupiry', category: 'Pasteis de Frango', price: 14.00, imageUrl: 'https://picsum.photos/seed/p3/300/200', active: true, ingredients: ['Frango desfiado', 'Catupiry original', 'Tempero da casa'] },
+  { id: '5', name: '4 Queijos Especial', description: 'Mussarela, provolone, parmesão e gorgonzola', category: 'Pasteis Especiais', price: 16.00, imageUrl: 'https://picsum.photos/seed/p4/300/200', active: true, ingredients: ['Mussarela', 'Provolone', 'Parmesão', 'Gorgonzola'] },
+  { id: '6', name: 'Pastel de Bacalhau', description: 'Bacalhau do porto desfiado com azeitonas', category: 'Pasteis Especiais', price: 22.00, imageUrl: 'https://picsum.photos/seed/p13/300/200', active: true, ingredients: ['Bacalhau do Porto', 'Azeitona preta', 'Azeite extra virgem'] },
+  { id: '7', name: 'Caldo de Cana 500ml', description: 'Moído na hora, bem geladinho', category: 'Bebidas', price: 8.00, imageUrl: 'https://picsum.photos/seed/p5/300/200', active: true, ingredients: ['Cana de açúcar selecionada'] },
+  { id: '8', name: 'Coca-Cola Lata', description: '350ml gelada', category: 'Bebidas', price: 6.50, imageUrl: 'https://picsum.photos/seed/p6/300/200', active: true, ingredients: ['Refrigerante'] },
+  { id: '9', name: 'Pastel de Camarão', description: 'Camarões selecionados com molho especial', category: 'Pasteis Especiais', price: 25.00, imageUrl: 'https://picsum.photos/seed/p14/300/200', active: true, ingredients: ['Camarão', 'Molho branco especial', 'Salsinha'] },
+  { id: '10', name: 'Encomenda Cento Mini', description: 'Cento de mini pastéis variados para festas', category: 'Encomendas', price: 120.00, imageUrl: 'https://picsum.photos/seed/p15/300/200', active: true, ingredients: ['Mini massas', 'Recheios variados'] },
 ];
 
 const initialTables: Table[] = Array.from({ length: 12 }, (_, i) => ({

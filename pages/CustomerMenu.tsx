@@ -17,7 +17,22 @@ const CustomerMenu: React.FC<CustomerMenuProps> = ({ user, onLogout }) => {
   const [cart, setCart] = useState<OrderItem[]>([]);
   const [settings, setSettings] = useState<BusinessSettings>(db.getSettings());
   const [showCart, setShowCart] = useState(false);
+  const [orderType, setOrderType] = useState<'delivery' | 'pickup' | 'table'>('delivery');
+  const [tableNumber, setTableNumber] = useState<number | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [customNotes, setCustomNotes] = useState('');
+  const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
   const [isOrdering, setIsOrdering] = useState(false);
+
+  useEffect(() => {
+    // Tenta detectar mesa via URL (ex: ?mesa=5)
+    const params = new URLSearchParams(window.location.search);
+    const mesa = params.get('mesa');
+    if (mesa) {
+      setTableNumber(parseInt(mesa));
+      setOrderType('table');
+    }
+  }, []);
   const [orderSuccess, setOrderSuccess] = useState(false);
   const [lastOrderId, setLastOrderId] = useState<string | null>(null);
   const [notification, setNotification] = useState<{message: string, type: 'success' | 'error'} | null>(null);
@@ -38,7 +53,9 @@ const CustomerMenu: React.FC<CustomerMenuProps> = ({ user, onLogout }) => {
     const update = () => {
       setProducts(db.getProducts().filter(p => p.active));
       setCategoriesList(db.getCategories().map(c => c.name));
-      setSettings(db.getSettings());
+      const sets = db.getSettings();
+      setSettings(sets);
+      setBusinessWhatsapp(sets.whatsapp || '');
     };
     update();
     const unsub = db.subscribe(update);
@@ -61,35 +78,48 @@ const CustomerMenu: React.FC<CustomerMenuProps> = ({ user, onLogout }) => {
     setTimeout(() => setNotification(null), 3000);
   };
 
-  const addToCart = async (product: Product) => {
-    const newCart = [...cart];
-    const existing = newCart.find(item => item.productId === product.id);
-    
-    if (existing) {
-      existing.quantity += 1;
-    } else {
-      newCart.push({ 
-        productId: product.id, 
-        name: product.name, 
-        price: product.price, 
-        quantity: 1 
-      });
+  const handleAddToCart = async () => {
+    if (!selectedProduct) return;
+
+    // Validate required options
+    if (selectedProduct.options) {
+      for (const opt of selectedProduct.options) {
+        if (opt.required && !selectedOptions[opt.name]) {
+          return notify(`Por favor, selecione: ${opt.name}`, 'error');
+        }
+      }
     }
+
+    const newCart = [...cart];
+    newCart.push({ 
+      productId: selectedProduct.id, 
+      name: selectedProduct.name, 
+      price: selectedProduct.price, 
+      quantity: 1,
+      notes: customNotes,
+      selectedOptions: { ...selectedOptions }
+    });
 
     setCart(newCart);
     if (user?.id) {
       await db.updateCart(user.id, newCart);
     }
+    
+    setSelectedProduct(null);
+    setCustomNotes('');
+    setSelectedOptions({});
+    notify('Adicionado ao carrinho!');
   };
 
-  const updateQuantity = async (productId: string, delta: number) => {
-    const newCart = cart.map(item => {
-      if (item.productId === productId) {
-        const newQty = Math.max(0, item.quantity + delta);
-        return { ...item, quantity: newQty };
-      }
-      return item;
-    }).filter(item => item.quantity > 0);
+  const updateQuantity = async (productId: string, delta: number, index: number) => {
+    const newCart = [...cart];
+    const item = newCart[index];
+    if (!item) return;
+
+    item.quantity = Math.max(0, item.quantity + delta);
+    if (item.quantity === 0) {
+      newCart.splice(index, 1);
+    }
 
     setCart(newCart);
     if (user?.id) {
@@ -98,18 +128,37 @@ const CustomerMenu: React.FC<CustomerMenuProps> = ({ user, onLogout }) => {
   };
 
   const total = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
-  const finalTotal = total + (settings.deliveryFee || 0);
+  const finalTotal = total + (orderType === 'delivery' ? (settings.deliveryFee || 0) : 0);
 
   const formatWhatsappMessage = (orderItems: OrderItem[], orderTotal: number) => {
-    let message = `*NOVO PEDIDO - HOJE PODE!* 🥟\n\n`;
+    let typeLabel = '🚀 Entrega';
+    if (orderType === 'pickup') typeLabel = '🛍️ Retirada';
+    if (orderType === 'table') typeLabel = `🪑 Mesa ${tableNumber}`;
+
+    let message = `*NOVO PEDIDO - ${settings.name.toUpperCase()}* 🥟\n\n`;
+    message += `*Tipo:* ${typeLabel}\n`;
     message += `*Cliente:* ${user?.name || 'Não identificado'}\n`;
-    message += `*Endereço:* ${user?.address || 'Retirada no balcão'}\n`;
+    
+    if (orderType === 'delivery') {
+      message += `*Endereço:* ${user?.address || 'N/A'}\n`;
+    }
+    
     message += `*WhatsApp:* ${user?.whatsapp || 'N/A'}\n\n`;
     message += `*ITENS:*\n`;
     
     orderItems.forEach(item => {
-      message += `• ${item.quantity}x ${item.name} - R$ ${(item.price * item.quantity).toFixed(2)}\n`;
+      message += `• ${item.quantity}x ${item.name}`;
+      if (item.selectedOptions && Object.entries(item.selectedOptions).length > 0) {
+        const opts = Object.entries(item.selectedOptions).map(([k, v]) => `${k}: ${v}`).join(', ');
+        message += ` [${opts}]`;
+      }
+      if (item.notes) message += ` (Obs: ${item.notes})`;
+      message += ` - R$ ${(item.price * item.quantity).toFixed(2)}\n`;
     });
+    
+    if (orderType === 'delivery' && settings.deliveryFee > 0) {
+      message += `\n*Taxa de Entrega:* R$ ${settings.deliveryFee.toFixed(2)}`;
+    }
     
     message += `\n*TOTAL: R$ ${orderTotal.toFixed(2)}*\n\n`;
     message += `_Pedido realizado via Cardápio Digital_`;
@@ -121,8 +170,12 @@ const CustomerMenu: React.FC<CustomerMenuProps> = ({ user, onLogout }) => {
     if (!user) return notify('Por favor, faça login para realizar o pedido.', 'error');
     if (cart.length === 0) return;
     
-    if (total < settings.minOrderValue) {
-      return notify(`Pedido mínimo é de R$ ${settings.minOrderValue.toFixed(2)}`, 'error');
+    if (orderType === 'delivery' && total < settings.minOrderValue) {
+      return notify(`Pedido mínimo para entrega é de R$ ${settings.minOrderValue.toFixed(2)}`, 'error');
+    }
+
+    if (orderType === 'table' && !tableNumber) {
+      return notify('Por favor, informe o número da mesa.', 'error');
     }
 
     if (!settings.isOpen) {
@@ -134,19 +187,19 @@ const CustomerMenu: React.FC<CustomerMenuProps> = ({ user, onLogout }) => {
       const order = await db.createOrder({
         items: cart,
         total: finalTotal,
-        deliveryFee: settings.deliveryFee,
+        deliveryFee: orderType === 'delivery' ? settings.deliveryFee : 0,
         status: OrderStatus.NOVO,
         customerName: user.name,
-        customerAddress: user.address,
+        customerAddress: orderType === 'delivery' ? user.address : (orderType === 'table' ? `Mesa ${tableNumber}` : 'Retirada na Loja'),
         customerWhatsapp: user.whatsapp,
         customerId: user.id,
-        type: 'delivery'
+        type: orderType,
+        tableNumber: orderType === 'table' ? tableNumber : undefined
       });
       
       const whatsappMsg = formatWhatsappMessage(cart, finalTotal);
       setLastOrderId(order.id);
       
-      // Limpa o carrinho local e no Firestore
       setCart([]);
       if (user?.id) {
         await db.updateCart(user.id, []);
@@ -155,7 +208,6 @@ const CustomerMenu: React.FC<CustomerMenuProps> = ({ user, onLogout }) => {
       setShowCart(false);
       setOrderSuccess(true);
 
-      // Se houver whatsapp configurado, oferece a opção ou redireciona
       if (businessWhatsapp) {
         setConfirmConfig({
           isOpen: true,
@@ -194,7 +246,7 @@ const CustomerMenu: React.FC<CustomerMenuProps> = ({ user, onLogout }) => {
   };
 
   return (
-    <div className="max-w-2xl mx-auto bg-white min-h-screen pb-32 relative">
+    <div className="max-w-4xl mx-auto bg-white min-h-screen pb-32 relative">
       {notification && (
         <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-[250] px-6 py-3 rounded-2xl shadow-2xl font-bold text-white animate-slide-in-top ${
           notification.type === 'error' ? 'bg-red-500' : 'bg-green-600'
@@ -249,11 +301,64 @@ const CustomerMenu: React.FC<CustomerMenuProps> = ({ user, onLogout }) => {
         <div className="bg-white rounded-t-3xl p-4 space-y-8">
           {user && (
             <div className="bg-orange-50 p-4 rounded-2xl border border-orange-100 shadow-sm">
-              <p className="text-[9px] font-black text-orange-600 uppercase tracking-widest mb-1">Bem-vindo(a),</p>
-              <h2 className="text-base font-black text-slate-800">{user.name}</h2>
-              <p className="text-[9px] text-slate-400 font-bold uppercase mt-1 truncate">📍 {user.address}</p>
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="text-[9px] font-black text-orange-600 uppercase tracking-widest mb-1">Bem-vindo(a),</p>
+                  <h2 className="text-base font-black text-slate-800">{user.name}</h2>
+                </div>
+                <div className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${settings.isOpen ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                  {settings.isOpen ? 'Aberto' : 'Fechado'}
+                </div>
+              </div>
+              {orderType === 'delivery' && user.address && (
+                <p className="text-[9px] text-slate-400 font-bold uppercase mt-1 truncate">📍 {user.address}</p>
+              )}
             </div>
           )}
+
+          {/* Order Type Selector at Top */}
+          <div className="space-y-4">
+            <div className="flex bg-slate-100 p-1 rounded-2xl shadow-inner">
+              <button 
+                onClick={() => setOrderType('delivery')}
+                className={`flex-1 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${orderType === 'delivery' ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-400'}`}
+              >
+                🚀 Entrega
+              </button>
+              <button 
+                onClick={() => setOrderType('pickup')}
+                className={`flex-1 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${orderType === 'pickup' ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-400'}`}
+              >
+                🛍️ Retirada
+              </button>
+              <button 
+                onClick={() => setOrderType('table')}
+                className={`flex-1 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${orderType === 'table' ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-400'}`}
+              >
+                🪑 Mesa
+              </button>
+            </div>
+
+            {orderType === 'table' && (
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 animate-fade-in">
+                <div className="flex justify-between items-center mb-3">
+                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Selecione sua Mesa</label>
+                  {tableNumber && <span className="text-[10px] font-black text-orange-600 bg-orange-100 px-2 py-0.5 rounded-full">Mesa {tableNumber}</span>}
+                </div>
+                <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+                  {[1,2,3,4,5,6,7,8,9,10,11,12].map(num => (
+                    <button
+                      key={num}
+                      onClick={() => setTableNumber(num)}
+                      className={`min-w-[45px] h-[45px] rounded-xl text-xs font-black transition-all flex-shrink-0 flex items-center justify-center ${tableNumber === num ? 'bg-orange-500 text-white shadow-lg scale-105' : 'bg-white text-slate-400 border border-slate-100 shadow-sm'}`}
+                    >
+                      {num}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
 
           {orderSuccess && (
             <div className="bg-green-500 text-white p-6 rounded-[2rem] font-black text-center animate-bounce-in shadow-xl shadow-green-100">
@@ -276,10 +381,14 @@ const CustomerMenu: React.FC<CustomerMenuProps> = ({ user, onLogout }) => {
                   <h2 className="text-xl font-black text-slate-800 tracking-tight">{cat}</h2>
                   <div className="h-px flex-1 bg-slate-100"></div>
                 </div>
-                <div className="grid grid-cols-1 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {products.filter(p => p.category === cat).map(product => (
-                    <div key={product.id} className="flex gap-3 p-2 rounded-2xl hover:bg-slate-50 transition-all group border border-transparent hover:border-slate-100 bg-white shadow-sm sm:shadow-none">
-                      <div className="relative w-20 h-20 sm:w-24 sm:h-24 flex-shrink-0">
+                    <div 
+                      key={product.id} 
+                      onClick={() => setSelectedProduct(product)}
+                      className="flex gap-3 p-2 rounded-2xl hover:bg-slate-50 transition-all group border border-slate-100 bg-white shadow-sm cursor-pointer active:scale-[0.98]"
+                    >
+                      <div className="relative w-16 h-16 sm:w-20 sm:h-20 flex-shrink-0">
                         <img 
                           src={product.imageUrl} 
                           alt={product.name} 
@@ -287,18 +396,13 @@ const CustomerMenu: React.FC<CustomerMenuProps> = ({ user, onLogout }) => {
                           className="w-full h-full rounded-xl object-cover shadow-sm group-hover:scale-105 transition-transform"
                         />
                       </div>
-                      <div className="flex-1 flex flex-col justify-between py-0.5">
-                        <div>
-                          <div className="flex justify-between items-start">
-                            <h3 className="font-black text-slate-800 text-sm sm:text-base leading-tight pr-2">{product.name}</h3>
-                            <span className="font-black text-orange-600 text-sm whitespace-nowrap">R$ {product.price.toFixed(2)}</span>
-                          </div>
-                          <p className="text-[10px] sm:text-xs text-slate-400 leading-snug line-clamp-2 mt-1 font-medium">{product.description}</p>
-                        </div>
-                        <div className="flex justify-end mt-1">
+                      <div className="flex-1 flex flex-col justify-center py-0.5">
+                        <h3 className="font-black text-slate-800 text-xs sm:text-sm leading-tight pr-2">{product.name}</h3>
+                        <p className="text-[9px] sm:text-[10px] text-slate-400 leading-snug line-clamp-1 mt-0.5 font-medium">{product.description}</p>
+                        <div className="flex justify-between items-center mt-2">
+                          <span className="font-black text-orange-600 text-xs">R$ {product.price.toFixed(2)}</span>
                           <button 
-                            onClick={() => addToCart(product)}
-                            className="bg-slate-900 text-white px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-orange-500 active:scale-95 transition-all"
+                            className="bg-slate-900 text-white px-3 py-1.5 rounded-lg text-[8px] font-black uppercase tracking-widest hover:bg-orange-500 active:scale-95 transition-all shadow-sm"
                           >
                             Adicionar
                           </button>
@@ -310,9 +414,83 @@ const CustomerMenu: React.FC<CustomerMenuProps> = ({ user, onLogout }) => {
               </div>
             ))}
           </div>
-
         </div>
       </div>
+
+      {/* Product Customization Modal */}
+      {selectedProduct && (
+        <div className="fixed inset-0 z-[150] flex items-end sm:items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white w-full max-w-lg rounded-t-[2.5rem] sm:rounded-[2.5rem] shadow-2xl overflow-hidden animate-slide-up max-h-[90vh] flex flex-col">
+            <div className="relative h-40 sm:h-64 flex-shrink-0">
+              <img src={selectedProduct.imageUrl} alt={selectedProduct.name} className="w-full h-full object-cover" />
+              <button onClick={() => setSelectedProduct(null)} className="absolute top-3 right-3 bg-black/50 text-white w-8 h-8 rounded-full flex items-center justify-center backdrop-blur-md text-sm">✕</button>
+            </div>
+            
+            <div className="p-5 sm:p-8 overflow-y-auto flex-1 space-y-5">
+              <div>
+                <h3 className="text-xl font-black text-slate-800 leading-tight">{selectedProduct.name}</h3>
+                <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">{selectedProduct.description}</p>
+                {selectedProduct.ingredients && selectedProduct.ingredients.length > 0 && (
+                  <div className="mt-3">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Ingredientes:</p>
+                    <div className="flex flex-wrap gap-1">
+                      {selectedProduct.ingredients.map((ing, idx) => (
+                        <span key={idx} className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full text-[9px] font-bold">
+                          {ing}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <p className="text-lg font-black text-orange-600 mt-2">R$ {selectedProduct.price.toFixed(2)}</p>
+              </div>
+
+              {selectedProduct.options?.map(opt => (
+                <div key={opt.name} className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <h4 className="font-black text-slate-800 text-[10px] uppercase tracking-widest">{opt.name}</h4>
+                    {opt.required && <span className="text-[8px] bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full font-black uppercase">Obrigatório</span>}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {opt.choices.map(choice => (
+                      <button
+                        key={choice}
+                        onClick={() => setSelectedOptions(prev => ({ ...prev, [opt.name]: choice }))}
+                        className={`p-2.5 rounded-xl border-2 text-[10px] font-bold transition-all ${
+                          selectedOptions[opt.name] === choice 
+                            ? 'border-orange-500 bg-orange-50 text-orange-600' 
+                            : 'border-slate-100 bg-slate-50 text-slate-500 hover:border-slate-200'
+                        }`}
+                      >
+                        {choice}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+
+              <div className="space-y-2">
+                <h4 className="font-black text-slate-800 text-[10px] uppercase tracking-widest">Observações</h4>
+                <textarea
+                  value={customNotes}
+                  onChange={e => setCustomNotes(e.target.value)}
+                  placeholder="Ex: Sem cebola, bem frito, etc."
+                  className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl p-3 text-xs outline-none focus:border-orange-500 transition-all min-h-[80px] resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="p-5 sm:p-8 border-t border-slate-100 bg-white">
+              <button 
+                onClick={handleAddToCart}
+                className="w-full py-4 bg-orange-500 text-white rounded-2xl font-black text-base shadow-xl hover:bg-orange-600 active:scale-95 transition-all"
+              >
+                Adicionar ao Carrinho
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Floating Cart Button */}
       {cart.length > 0 && (
@@ -339,35 +517,43 @@ const CustomerMenu: React.FC<CustomerMenuProps> = ({ user, onLogout }) => {
               </div>
 
               <div className="space-y-4 max-h-[40vh] overflow-y-auto pr-2">
-                {cart.map(item => (
-                  <div key={item.productId} className="flex items-center justify-between bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                {cart.map((item, idx) => (
+                  <div key={idx} className="flex items-center justify-between bg-slate-50 p-3 rounded-2xl border border-slate-100">
                     <div className="flex-1">
                       <h4 className="font-bold text-slate-800 text-sm">{item.name}</h4>
+                      {item.selectedOptions && Object.entries(item.selectedOptions).length > 0 && (
+                        <p className="text-[10px] text-slate-500 italic">
+                          {Object.values(item.selectedOptions).join(', ')}
+                        </p>
+                      )}
+                      {item.notes && <p className="text-[10px] text-slate-400">Obs: {item.notes}</p>}
                       <p className="text-xs text-orange-600 font-black">R$ {item.price.toFixed(2)}</p>
                     </div>
                     <div className="flex items-center bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-                      <button onClick={() => updateQuantity(item.productId, -1)} className="px-3 py-1 text-slate-500 font-black">-</button>
+                      <button onClick={() => updateQuantity(item.productId, -1, idx)} className="px-3 py-1 text-slate-500 font-black">-</button>
                       <span className="px-2 py-1 font-black text-slate-900 text-sm w-6 text-center">{item.quantity}</span>
-                      <button onClick={() => updateQuantity(item.productId, 1)} className="px-3 py-1 text-slate-500 font-black">+</button>
+                      <button onClick={() => updateQuantity(item.productId, 1, idx)} className="px-3 py-1 text-slate-500 font-black">+</button>
                     </div>
                   </div>
                 ))}
               </div>
 
-              <div className="border-t border-slate-100 pt-4 space-y-2">
-                <div className="flex justify-between items-center text-slate-500 font-bold text-xs uppercase tracking-widest">
-                  <span>Subtotal</span>
-                  <span>R$ {total.toFixed(2)}</span>
-                </div>
-                {settings.deliveryFee > 0 && (
+              <div className="border-t border-slate-100 pt-4 space-y-4">
+                <div className="space-y-2">
                   <div className="flex justify-between items-center text-slate-500 font-bold text-xs uppercase tracking-widest">
-                    <span>Taxa de Entrega</span>
-                    <span>R$ {settings.deliveryFee.toFixed(2)}</span>
+                    <span>Subtotal</span>
+                    <span>R$ {total.toFixed(2)}</span>
                   </div>
-                )}
-                <div className="flex justify-between items-center text-2xl font-black text-slate-800 pt-2">
-                  <span className="text-sm font-bold text-slate-400 uppercase tracking-widest">Total</span>
-                  <span className="text-orange-600">R$ {finalTotal.toFixed(2)}</span>
+                  {orderType === 'delivery' && settings.deliveryFee > 0 && (
+                    <div className="flex justify-between items-center text-slate-500 font-bold text-xs uppercase tracking-widest">
+                      <span>Taxa de Entrega</span>
+                      <span>R$ {settings.deliveryFee.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between items-center text-2xl font-black text-slate-800 pt-2">
+                    <span className="text-sm font-bold text-slate-400 uppercase tracking-widest">Total</span>
+                    <span className="text-orange-600">R$ {finalTotal.toFixed(2)}</span>
+                  </div>
                 </div>
 
                 <button 
@@ -379,7 +565,7 @@ const CustomerMenu: React.FC<CustomerMenuProps> = ({ user, onLogout }) => {
                 >
                   {isOrdering ? 'Enviando...' : (settings.whatsapp ? 'Enviar via WhatsApp' : 'Confirmar Pedido')}
                 </button>
-                <p className="text-[9px] text-slate-400 text-center mt-4 font-bold uppercase tracking-widest">Pagamento na entrega</p>
+                <p className="text-[9px] text-slate-400 text-center mt-4 font-bold uppercase tracking-widest">Pagamento na entrega / retirada</p>
               </div>
             </div>
           </div>

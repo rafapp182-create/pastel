@@ -478,7 +478,7 @@ const TableManager: React.FC<TableManagerProps> = ({ setActiveTab }) => {
               <button 
                 key={table.id}
                 onClick={() => handleTableClick(table)}
-                className={`p-6 rounded-[2.5rem] border-2 transition-all flex flex-col items-center justify-center gap-2 group hover:scale-105 active:scale-95 relative ${
+                className={`p-4 rounded-3xl border-2 transition-all flex flex-col items-center justify-center gap-2 group hover:scale-105 active:scale-95 relative ${
                   !isOccupied 
                     ? 'bg-white border-slate-100 hover:border-orange-200' 
                     : ready
@@ -486,10 +486,10 @@ const TableManager: React.FC<TableManagerProps> = ({ setActiveTab }) => {
                       : 'bg-orange-500 border-orange-600 text-white shadow-xl shadow-orange-100'
                 }`}
               >
-                <span className="text-4xl mb-1 transition-transform group-hover:scale-110">
+                <span className="text-3xl mb-1 transition-transform group-hover:scale-110">
                   {isOccupied ? (ready ? '✅' : '🥟') : '🍽️'}
                 </span>
-                <span className={`text-xl font-black ${!isOccupied ? 'text-slate-800' : 'text-white'}`}>
+                <span className={`text-lg font-black ${!isOccupied ? 'text-slate-800' : 'text-white'}`}>
                   {table.number}
                 </span>
                 

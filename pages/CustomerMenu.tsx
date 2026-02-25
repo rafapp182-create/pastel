@@ -20,9 +20,17 @@ const CustomerMenu: React.FC<CustomerMenuProps> = ({ user, onLogout }) => {
   const [orderType, setOrderType] = useState<'delivery' | 'pickup' | 'table'>('delivery');
   const [tableNumber, setTableNumber] = useState<number | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [modalQuantity, setModalQuantity] = useState(1);
   const [customNotes, setCustomNotes] = useState('');
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
   const [isOrdering, setIsOrdering] = useState(false);
+
+  const handleCloseModal = () => {
+    setSelectedProduct(null);
+    setModalQuantity(1);
+    setCustomNotes('');
+    setSelectedOptions({});
+  };
 
   useEffect(() => {
     // Tenta detectar mesa via URL (ex: ?mesa=5)
@@ -95,7 +103,7 @@ const CustomerMenu: React.FC<CustomerMenuProps> = ({ user, onLogout }) => {
       productId: selectedProduct.id, 
       name: selectedProduct.name, 
       price: selectedProduct.price, 
-      quantity: 1,
+      quantity: modalQuantity,
       notes: customNotes,
       selectedOptions: { ...selectedOptions }
     });
@@ -105,9 +113,7 @@ const CustomerMenu: React.FC<CustomerMenuProps> = ({ user, onLogout }) => {
       await db.updateCart(user.id, newCart);
     }
     
-    setSelectedProduct(null);
-    setCustomNotes('');
-    setSelectedOptions({});
+    handleCloseModal();
     notify('Adicionado ao carrinho!');
   };
 
@@ -285,12 +291,12 @@ const CustomerMenu: React.FC<CustomerMenuProps> = ({ user, onLogout }) => {
       </div>
 
       {/* Sticky Category Nav */}
-      <div className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-100 px-2 py-3 overflow-x-auto no-scrollbar flex gap-2 shadow-sm">
+      <div className="sticky top-0 z-40 bg-white/90 backdrop-blur-xl border-b border-slate-100 px-4 py-4 overflow-x-auto no-scrollbar flex gap-3 shadow-sm">
         {categories.map(cat => (
           <button
             key={cat}
             onClick={() => scrollToCategory(cat)}
-            className="whitespace-nowrap px-4 py-1.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-black uppercase tracking-widest hover:bg-orange-500 hover:text-white transition-all active:scale-95"
+            className="whitespace-nowrap px-5 py-2 rounded-2xl bg-slate-50 text-slate-500 text-[11px] font-black uppercase tracking-widest hover:bg-orange-500 hover:text-white transition-all active:scale-95 border border-slate-100 shadow-sm"
           >
             {cat}
           </button>
@@ -374,35 +380,40 @@ const CustomerMenu: React.FC<CustomerMenuProps> = ({ user, onLogout }) => {
             </div>
           )}
 
-          <div className="space-y-10">
+          <div className="space-y-16">
             {categories.map(cat => (
-              <div key={cat} id={`category-${cat}`} className="space-y-4 scroll-mt-32">
-                <div className="flex items-center gap-3">
-                  <h2 className="text-xl font-black text-slate-800 tracking-tight">{cat}</h2>
-                  <div className="h-px flex-1 bg-slate-100"></div>
+              <section key={cat} id={`category-${cat}`} className="scroll-mt-32 animate-fade-in">
+                <div className="flex items-baseline justify-between mb-6">
+                  <h2 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+                    <span className="w-2 h-8 bg-orange-500 rounded-full"></span>
+                    {cat}
+                  </h2>
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-100 px-3 py-1 rounded-full">
+                    {products.filter(p => p.category === cat).length} itens
+                  </span>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {products.filter(p => p.category === cat).map(product => (
                     <div 
                       key={product.id} 
                       onClick={() => setSelectedProduct(product)}
-                      className="flex gap-3 p-2 rounded-2xl hover:bg-slate-50 transition-all group border border-slate-100 bg-white shadow-sm cursor-pointer active:scale-[0.98]"
+                      className="flex gap-4 p-3 rounded-3xl hover:bg-slate-50 transition-all group border border-slate-100 bg-white shadow-sm cursor-pointer active:scale-[0.98]"
                     >
-                      <div className="relative w-16 h-16 sm:w-20 sm:h-20 flex-shrink-0">
+                      <div className="relative w-20 h-20 sm:w-24 sm:h-24 flex-shrink-0">
                         <img 
                           src={product.imageUrl} 
                           alt={product.name} 
                           referrerPolicy="no-referrer"
-                          className="w-full h-full rounded-xl object-cover shadow-sm group-hover:scale-105 transition-transform"
+                          className="w-full h-full rounded-2xl object-cover shadow-sm group-hover:scale-105 transition-transform"
                         />
                       </div>
-                      <div className="flex-1 flex flex-col justify-center py-0.5">
-                        <h3 className="font-black text-slate-800 text-xs sm:text-sm leading-tight pr-2">{product.name}</h3>
-                        <p className="text-[9px] sm:text-[10px] text-slate-400 leading-snug line-clamp-1 mt-0.5 font-medium">{product.description}</p>
-                        <div className="flex justify-between items-center mt-2">
-                          <span className="font-black text-orange-600 text-xs">R$ {product.price.toFixed(2)}</span>
+                      <div className="flex-1 flex flex-col justify-center py-1">
+                        <h3 className="font-black text-slate-800 text-sm sm:text-base leading-tight pr-2">{product.name}</h3>
+                        <p className="text-[10px] sm:text-xs text-slate-400 leading-snug line-clamp-2 mt-1 font-medium">{product.description}</p>
+                        <div className="flex justify-between items-center mt-3">
+                          <span className="font-black text-orange-600 text-sm">R$ {product.price.toFixed(2)}</span>
                           <button 
-                            className="bg-slate-900 text-white px-3 py-1.5 rounded-lg text-[8px] font-black uppercase tracking-widest hover:bg-orange-500 active:scale-95 transition-all shadow-sm"
+                            className="bg-slate-900 text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-orange-500 active:scale-95 transition-all shadow-md"
                           >
                             Adicionar
                           </button>
@@ -411,7 +422,7 @@ const CustomerMenu: React.FC<CustomerMenuProps> = ({ user, onLogout }) => {
                     </div>
                   ))}
                 </div>
-              </div>
+              </section>
             ))}
           </div>
         </div>
@@ -420,13 +431,13 @@ const CustomerMenu: React.FC<CustomerMenuProps> = ({ user, onLogout }) => {
       {/* Product Customization Modal */}
       {selectedProduct && (
         <div className="fixed inset-0 z-[150] flex items-end sm:items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white w-full max-w-lg rounded-t-[2.5rem] sm:rounded-[2.5rem] shadow-2xl overflow-hidden animate-slide-up max-h-[90vh] flex flex-col">
+          <div className="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden animate-slide-up max-h-[90vh] flex flex-col">
             <div className="relative h-40 sm:h-64 flex-shrink-0">
               <img src={selectedProduct.imageUrl} alt={selectedProduct.name} className="w-full h-full object-cover" />
-              <button onClick={() => setSelectedProduct(null)} className="absolute top-3 right-3 bg-black/50 text-white w-8 h-8 rounded-full flex items-center justify-center backdrop-blur-md text-sm">✕</button>
+              <button onClick={handleCloseModal} className="absolute top-3 right-3 bg-black/50 text-white w-8 h-8 rounded-full flex items-center justify-center backdrop-blur-md text-sm">✕</button>
             </div>
             
-            <div className="p-5 sm:p-8 overflow-y-auto flex-1 space-y-5">
+            <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-5">
               <div>
                 <h3 className="text-xl font-black text-slate-800 leading-tight">{selectedProduct.name}</h3>
                 <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">{selectedProduct.description}</p>
@@ -442,7 +453,30 @@ const CustomerMenu: React.FC<CustomerMenuProps> = ({ user, onLogout }) => {
                     </div>
                   </div>
                 )}
-                <p className="text-lg font-black text-orange-600 mt-2">R$ {selectedProduct.price.toFixed(2)}</p>
+                <div className="flex items-center justify-between mt-4">
+                  <div className="flex flex-col">
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Subtotal</p>
+                    <p className="text-lg font-black text-orange-600">R$ {(selectedProduct.price * modalQuantity).toFixed(2)}</p>
+                  </div>
+                  
+                  <div className="flex items-center bg-slate-100 rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+                    <button 
+                      onClick={() => setModalQuantity(Math.max(1, modalQuantity - 1))}
+                      className="px-4 py-2 text-slate-600 font-black hover:bg-slate-200 transition-colors"
+                    >
+                      -
+                    </button>
+                    <span className="px-4 py-2 font-black text-slate-900 text-sm min-w-[40px] text-center">
+                      {modalQuantity}
+                    </span>
+                    <button 
+                      onClick={() => setModalQuantity(modalQuantity + 1)}
+                      className="px-4 py-2 text-slate-600 font-black hover:bg-slate-200 transition-colors"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
               </div>
 
               {selectedProduct.options?.map(opt => (

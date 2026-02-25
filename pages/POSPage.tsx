@@ -393,7 +393,7 @@ const POSPage: React.FC = () => {
             className="bg-slate-900 text-white p-4 rounded-full shadow-2xl flex items-center gap-3 border-4 border-white animate-bounce-in"
           >
             <span className="text-2xl">🛒</span>
-            <span className="font-black text-sm">R$ {cartTotal.toFixed(2)}</span>
+            <span className="font-black text-sm">R$ {total.toFixed(2)}</span>
           </button>
         )}
       </div>
@@ -485,7 +485,7 @@ const POSPage: React.FC = () => {
             ))}
           </div>
 
-          <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm mt-4">
+          <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm mt-4">
              <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4">Aguardando Pagamento</h3>
              <div className="space-y-2">
                 {pendingPaymentOrders.length === 0 ? (
@@ -578,7 +578,7 @@ const POSPage: React.FC = () => {
           lg:relative lg:inset-auto lg:z-0 lg:p-0 lg:bg-transparent lg:backdrop-blur-none
         `}>
           <div className={`
-            bg-white rounded-3xl shadow-xl p-6 border border-slate-100 flex flex-col sticky top-4 h-[calc(100vh-160px)] print:hidden w-full
+            bg-white rounded-2xl shadow-xl p-4 border border-slate-100 flex flex-col sticky top-4 h-[calc(100vh-160px)] print:hidden w-full
             ${showMobileCart ? 'animate-slide-up max-h-[90vh]' : ''}
           `}>
             <div className="flex items-center justify-between mb-4">

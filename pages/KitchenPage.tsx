@@ -132,16 +132,25 @@ const KitchenPage: React.FC = () => {
     <div className="space-y-6 relative">
       {/* Notificação Flutuante */}
       {newOrderNotify && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[300] bg-red-600 text-white px-8 py-4 rounded-full shadow-2xl font-black flex items-center gap-3 animate-bounce">
-          <span className="text-2xl">🔔</span>
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[300] bg-red-600 text-white px-6 py-3 rounded-full shadow-2xl font-black flex items-center gap-3 animate-bounce">
+          <span className="text-lg">🔔</span>
           NOVO PEDIDO NA COZINHA!
         </div>
       )}
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex flex-col">
-          <h2 className="text-2xl font-bold text-slate-800">Cozinha & Preparo</h2>
-          <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Apenas Pastelaria & Sucos</p>
+          <div className="flex items-center gap-3">
+            <h2 className="text-xl font-bold text-slate-800">Cozinha & Preparo</h2>
+            {newOrderNotify && (
+              <span className="flex h-2 w-2 relative">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+              </span>
+            )}
+            <span className={`text-xl transition-all ${newOrderNotify ? 'animate-bounce' : 'opacity-20'}`}>🔔</span>
+          </div>
+          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Apenas Pastelaria & Sucos</p>
         </div>
 
         {/* Sub-navegação interna */}
@@ -164,40 +173,43 @@ const KitchenPage: React.FC = () => {
       {activeTab === 'ativos' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-fade-in">
           {orders.length === 0 ? (
-            <div className="col-span-full py-20 flex flex-col items-center justify-center text-slate-400 bg-white rounded-[3rem] border-4 border-dashed border-slate-100">
-              <span className="text-8xl mb-4 grayscale">👨‍🍳</span>
-              <p className="text-xl font-black text-slate-300">Nenhum pedido pendente!</p>
+            <div className="col-span-full py-16 flex flex-col items-center justify-center text-slate-400 bg-white rounded-3xl border-4 border-dashed border-slate-100">
+              <span className="text-6xl mb-4 grayscale">👨‍🍳</span>
+              <p className="text-lg font-black text-slate-300">Nenhum pedido pendente!</p>
             </div>
           ) : (
             orders.map(order => (
-              <div key={order.id} className={`bg-white rounded-[2.5rem] shadow-xl overflow-hidden border-t-[12px] transition-all flex flex-col ${
+              <div key={order.id} className={`bg-white rounded-2xl shadow-lg overflow-hidden border-t-[6px] transition-all flex flex-col ${
                 order.status === OrderStatus.NOVO ? 'border-red-500 animate-pulse-subtle' : 'border-yellow-500'
               }`}>
-                <div className="p-6 border-b border-slate-50 flex justify-between items-start bg-slate-50/50">
+                <div className="p-3 border-b border-slate-50 flex justify-between items-start bg-slate-50/50">
                   <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="bg-slate-800 text-white px-3 py-1 rounded-full text-xs font-black">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <span className="bg-slate-800 text-white px-1.5 py-0.5 rounded-full text-[9px] font-black">
                         #{order.id.split('-')[1]}
                       </span>
-                      <h3 className="text-2xl font-black text-slate-800">
+                      <h3 className="text-base font-black text-slate-800">
                         {order.tableNumber ? `MESA ${order.tableNumber}` : 'BALCÃO'}
                       </h3>
+                      {order.status === OrderStatus.NOVO && (
+                        <span className="bg-red-500 text-white text-[7px] font-black px-1.5 py-0.5 rounded-full animate-pulse shadow-sm">NOVO</span>
+                      )}
                     </div>
                     {order.customerName && (
-                      <div className="text-orange-600 font-black text-sm uppercase flex items-center gap-1">
+                      <div className="text-orange-600 font-black text-[10px] uppercase flex items-center gap-1">
                         <span>👤</span> {order.customerName}
                       </div>
                     )}
                   </div>
-                  <div className="flex flex-col items-end gap-2">
-                    <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${
+                  <div className="flex flex-col items-end gap-1.5">
+                    <div className={`px-1.5 py-0.5 rounded-full text-[8px] font-black uppercase ${
                       order.status === OrderStatus.NOVO ? 'bg-red-100 text-red-600' : 'bg-yellow-100 text-yellow-600'
                     }`}>
                       {order.status}
                     </div>
                     <button 
                       onClick={() => handlePrint(order)}
-                      className="bg-slate-100 hover:bg-slate-200 text-slate-600 p-2 rounded-xl transition-colors flex items-center gap-2 text-[10px] font-black uppercase"
+                      className="bg-slate-100 hover:bg-slate-200 text-slate-600 p-1 rounded-lg transition-colors flex items-center gap-1 text-[8px] font-black uppercase"
                       title="Imprimir Pedido"
                     >
                       <span>🖨️</span>
@@ -206,27 +218,27 @@ const KitchenPage: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="p-6 space-y-4 flex-1">
+                <div className="p-3 space-y-2.5 flex-1">
                   {order.items.filter(item => isKitchenItem(item.name)).map((item, idx) => (
-                    <div key={idx} className="flex flex-col border-b border-slate-100 last:border-none pb-3">
+                    <div key={idx} className="flex flex-col border-b border-slate-100 last:border-none pb-2">
                       <div className="flex justify-between items-center text-slate-800">
-                        <div className="flex items-center gap-3">
-                          <span className="w-10 h-10 bg-orange-100 text-orange-600 rounded-2xl flex items-center justify-center font-black text-lg shadow-sm">
+                        <div className="flex items-center gap-2">
+                          <span className="w-7 h-7 bg-orange-100 text-orange-600 rounded-lg flex items-center justify-center font-black text-sm shadow-sm">
                             {item.quantity}
                           </span>
-                          <span className="font-black text-xl">{item.name}</span>
+                          <span className="font-black text-sm">{item.name}</span>
                         </div>
-                        <input type="checkbox" className="w-6 h-6 rounded-lg border-2 border-slate-200 text-orange-500 focus:ring-orange-500" />
+                        <input type="checkbox" className="w-4 h-4 rounded border-2 border-slate-200 text-orange-500 focus:ring-orange-500" />
                       </div>
-                      {item.description && <p className="text-xs text-slate-400 italic mt-1 ml-13">{item.description}</p>}
+                      {item.description && <p className="text-[9px] text-slate-400 italic mt-0.5 ml-9">{item.description}</p>}
                     </div>
                   ))}
                 </div>
 
-                <div className="p-6 bg-slate-50 border-t border-slate-100">
+                <div className="p-3 bg-slate-50 border-t border-slate-100">
                   <button 
                     onClick={() => handleUpdateStatus(order.id, order.status)}
-                    className={`w-full py-4 rounded-2xl font-black text-lg transition-all shadow-lg active:scale-95 ${
+                    className={`w-full py-2.5 rounded-xl font-black text-sm transition-all shadow-md active:scale-95 ${
                       order.status === OrderStatus.NOVO ? 'bg-red-500 text-white hover:bg-red-600' : 
                       'bg-yellow-500 text-white hover:bg-yellow-600'
                     }`}

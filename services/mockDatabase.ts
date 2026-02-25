@@ -321,19 +321,6 @@ class FirebaseDatabase {
 
   async createOrder(order: Omit<Order, 'id' | 'createdAt' | 'sessionId'>) {
     try {
-      // Se for pedido de mesa/comanda, exige caixa aberto
-      if (order.tableNumber && !this.currentSession) {
-        throw new Error("O caixa deve estar aberto para realizar vendas via comanda ou mesa.");
-      }
-
-      const itemsWithDescription = order.items.map(item => {
-        const prod = this.products.find(p => p.id === item.productId);
-        return {
-          ...item,
-          description: prod?.description || ''
-        };
-      });
-
       // Se não houver sessão ativa em memória, tenta buscar a mais recente aberta
       let sessionId = this.currentSession?.id;
       if (!sessionId) {
@@ -347,6 +334,19 @@ class FirebaseDatabase {
           console.warn("Aviso: Não foi possível buscar sessão aberta:", err);
         }
       }
+
+      // Se for pedido de mesa/comanda, exige caixa aberto
+      if (order.tableNumber && !sessionId) {
+        throw new Error("O caixa deve estar aberto para realizar vendas via comanda ou mesa.");
+      }
+
+      const itemsWithDescription = order.items.map(item => {
+        const prod = this.products.find(p => p.id === item.productId);
+        return {
+          ...item,
+          description: prod?.description || ''
+        };
+      });
 
       const orderData = this.cleanObject({
         ...order,

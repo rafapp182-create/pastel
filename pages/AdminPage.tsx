@@ -4,7 +4,7 @@ import { db } from '../services/mockDatabase';
 import { Product, Order, CashierSession, PaymentType, UserRole, Category, BusinessSettings } from '../types';
 import { auth, firestore } from '../services/firebase';
 import { collection, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore';
-import { initializeApp } from 'firebase/app';
+import { initializeApp, deleteApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
 import ConfirmModal from '../components/ConfirmModal';
 
@@ -19,7 +19,8 @@ const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [session, setSession] = useState<CashierSession | null>(null);
   const [users, setUsers] = useState<any[]>([]);
-  const [activeSubTab, setActiveSubTab] = useState<'stats' | 'inventory' | 'history' | 'users' | 'settings' | 'cashier' | 'categories'>('stats');
+  const [selectedCustomer, setSelectedCustomer] = useState<any | null>(null);
+  const [activeSubTab, setActiveSubTab] = useState<'stats' | 'inventory' | 'history' | 'users' | 'settings' | 'cashier' | 'categories' | 'customers'>('stats');
   const [expandedDate, setExpandedDate] = useState<string | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [newCategoryName, setNewCategoryName] = useState('');
@@ -39,6 +40,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
     { id: 'inventory', label: 'Produtos', icon: '🥟', adminOnly: false },
     { id: 'categories', label: 'Categorias', icon: '🏷️', adminOnly: false },
     { id: 'history', label: 'Histórico', icon: '📜', adminOnly: false },
+    { id: 'customers', label: 'Clientes', icon: '👤', adminOnly: true },
     { id: 'users', label: 'Equipe', icon: '👥', adminOnly: true },
     { id: 'settings', label: 'Ajustes', icon: '⚙️', adminOnly: true }
   ].filter(tab => !tab.adminOnly || isAdmin);
@@ -248,9 +250,10 @@ const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
     setIsCreatingUser(true);
     const cleanEmail = newUser.email.trim();
     const appName = `Secondary-${Date.now()}`;
+    let secondaryApp;
 
     try {
-      const secondaryApp = initializeApp(auth.app.options, appName);
+      secondaryApp = initializeApp(auth.app.options, appName);
       const secondaryAuth = getAuth(secondaryApp);
       
       const userCredential = await createUserWithEmailAndPassword(secondaryAuth, cleanEmail, newUser.password);
@@ -265,11 +268,18 @@ const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
 
       setNewUser({ name: '', email: '', password: '', role: UserRole.CAIXA });
       notify('Usuário criado com sucesso!');
-      await secondaryApp.delete();
     } catch (err: any) {
       console.error("Erro ao criar usuário:", err);
-      notify('Erro: ' + (err.message || 'Verifique os dados.'), 'error');
+      let errorMsg = 'Erro ao criar usuário.';
+      if (err.code === 'auth/email-already-in-use') errorMsg = 'Este e-mail já está em uso.';
+      if (err.code === 'auth/weak-password') errorMsg = 'A senha deve ter pelo menos 6 caracteres.';
+      if (err.code === 'auth/invalid-email') errorMsg = 'E-mail inválido.';
+      
+      notify(errorMsg, 'error');
     } finally {
+      if (secondaryApp) {
+        await deleteApp(secondaryApp);
+      }
       setIsCreatingUser(false);
     }
   };
@@ -347,20 +357,20 @@ const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
       {/* ABA: RESUMO */}
       {activeSubTab === 'stats' && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-fade-in">
-          <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
+          <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
             <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Vendas Totais</p>
-            <h3 className="text-3xl font-black text-slate-900">R$ {orders.reduce((a, b) => a + b.total, 0).toFixed(2)}</h3>
+            <h3 className="text-2xl font-black text-slate-900">R$ {orders.reduce((a, b) => a + b.total, 0).toFixed(2)}</h3>
           </div>
-          <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
+          <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
             <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Total Pedidos</p>
-            <h3 className="text-3xl font-black text-slate-900">{orders.length}</h3>
+            <h3 className="text-2xl font-black text-slate-900">{orders.length}</h3>
           </div>
-          <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
+          <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
             <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Itens Ativos</p>
-            <h3 className="text-3xl font-black text-slate-900">{products.length}</h3>
+            <h3 className="text-2xl font-black text-slate-900">{products.length}</h3>
           </div>
 
-          <div className="md:col-span-3 bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
+          <div className="md:col-span-3 bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
             <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-6">Vendas por Categoria</h3>
             <div className="space-y-4">
               {categories.map(cat => {
@@ -396,7 +406,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
       {/* ABA: GESTÃO DE CAIXA */}
       {activeSubTab === 'cashier' && (
         <div className="space-y-6 animate-fade-in">
-          <div className="bg-white p-8 rounded-[2.5rem] shadow-lg border border-slate-100">
+          <div className="bg-white p-6 rounded-3xl shadow-lg border border-slate-100">
             <div className="flex items-center gap-4 mb-8">
               <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-3xl shadow-inner ${session ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
                 {session ? '🔓' : '🔒'}
@@ -922,7 +932,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
                 <tr><th className="px-8 py-4">Nome</th><th className="px-8 py-4">Cargo</th><th className="px-8 py-4 text-center">Ações</th></tr>
               </thead>
               <tbody>
-                {users.map(u => (
+                {users.filter(u => u.role !== 'customer').map(u => (
                   <tr key={u.id} className="border-b border-slate-50">
                     <td className="px-8 py-4 font-bold text-slate-900">{u.name}</td>
                     <td className="px-8 py-4 text-xs font-black uppercase text-orange-600">{u.role}</td>
@@ -935,7 +945,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
             </table>
             {/* Mobile List */}
             <div className="sm:hidden divide-y divide-slate-50">
-              {users.map(u => (
+              {users.filter(u => u.role !== 'customer').map(u => (
                 <div key={u.id} className="p-4 flex justify-between items-center">
                   <div>
                     <p className="font-bold text-slate-900">{u.name}</p>
@@ -944,6 +954,97 @@ const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
                   <button onClick={() => handleDeleteUser(u.id)} className="bg-red-50 text-red-500 p-2 rounded-lg">🗑️</button>
                 </div>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ABA: CLIENTES */}
+      {activeSubTab === 'customers' && (
+        <div className="space-y-8 animate-fade-in">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
+              <span>👤</span> Clientes Cadastrados
+            </h2>
+            <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-white px-4 py-2 rounded-xl border border-slate-100 shadow-sm">
+              Total: {users.filter(u => u.role === 'customer').length}
+            </div>
+          </div>
+
+          <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
+            <table className="w-full text-left">
+              <thead className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-widest">
+                <tr>
+                  <th className="px-8 py-4">Nome</th>
+                  <th className="px-8 py-4">E-mail</th>
+                  <th className="px-8 py-4">WhatsApp</th>
+                  <th className="px-8 py-4 text-center">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.filter(u => u.role === 'customer').map(u => (
+                  <tr key={u.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => setSelectedCustomer(u)}>
+                    <td className="px-8 py-4 font-bold text-slate-900">{u.name}</td>
+                    <td className="px-8 py-4 text-sm text-slate-500">{u.email}</td>
+                    <td className="px-8 py-4 text-sm text-slate-500">{u.whatsapp || '-'}</td>
+                    <td className="px-8 py-4 text-center">
+                      <button className="text-orange-500 hover:text-orange-700 p-2 font-black text-[10px] uppercase tracking-widest">Ver Detalhes</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Detalhes do Cliente */}
+      {selectedCustomer && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden animate-bounce-in">
+            <div className="p-8 space-y-6">
+              <div className="flex items-center justify-between">
+                <div className="w-16 h-16 bg-orange-100 text-orange-600 rounded-2xl flex items-center justify-center text-3xl">
+                  👤
+                </div>
+                <button onClick={() => setSelectedCustomer(null)} className="text-slate-400 hover:text-slate-600 text-xl">✕</button>
+              </div>
+              
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-2xl font-black text-slate-800 leading-tight">{selectedCustomer.name}</h3>
+                  <p className="text-xs font-bold text-orange-600 uppercase tracking-widest mt-1">Cliente Registrado</p>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 pt-4">
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">E-mail de Login</p>
+                    <p className="font-bold text-slate-800">{selectedCustomer.email}</p>
+                  </div>
+                  
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">WhatsApp</p>
+                    <p className="font-bold text-slate-800">{selectedCustomer.whatsapp || 'Não informado'}</p>
+                  </div>
+
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Endereço Padrão</p>
+                    <p className="font-bold text-slate-800 text-sm">{selectedCustomer.address || 'Não informado'}</p>
+                  </div>
+
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">ID do Usuário</p>
+                    <p className="font-mono text-[10px] text-slate-400 break-all">{selectedCustomer.id}</p>
+                  </div>
+                </div>
+              </div>
+
+              <button 
+                onClick={() => setSelectedCustomer(null)}
+                className="w-full py-4 bg-slate-900 text-white font-black rounded-2xl hover:bg-slate-800 transition-all active:scale-95 shadow-xl"
+              >
+                Fechar Detalhes
+              </button>
             </div>
           </div>
         </div>
@@ -1036,7 +1137,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
             </form>
           </div>
 
-          <div className="bg-white p-8 rounded-[2.5rem] shadow-lg border border-slate-100">
+          <div className="bg-white p-6 rounded-3xl shadow-lg border border-slate-100">
             <div className="flex items-center justify-between mb-8">
               <div className="flex items-center gap-3">
                 <span className="text-2xl">📱</span>
@@ -1053,7 +1154,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
             <div className="flex flex-col items-center justify-center space-y-6 py-10 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200 print:bg-white print:border-none print:p-0">
               <div className="bg-white p-6 rounded-[2rem] shadow-xl border border-slate-100 print:shadow-none print:border-none">
                 <img 
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${window.location.origin}/menu`} 
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${window.location.origin}?mode=register`} 
                   alt="QR Code do Cardápio" 
                   className="w-48 h-48 sm:w-64 sm:h-64"
                   referrerPolicy="no-referrer"
@@ -1061,8 +1162,8 @@ const AdminPage: React.FC<AdminPageProps> = ({ user, setActiveTab }) => {
               </div>
               <div className="text-center space-y-2">
                 <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight">Hoje Pode Pastelaria</h3>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Aponte a câmera para acessar o cardápio</p>
-                <p className="text-[10px] text-orange-500 font-black">{window.location.origin}/menu</p>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Acesse nosso Cardápio & Delivery</p>
+                <p className="text-[10px] text-orange-500 font-black">{window.location.origin}?mode=register</p>
               </div>
             </div>
           </div>
